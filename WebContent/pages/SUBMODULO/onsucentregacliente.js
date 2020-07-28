@@ -1,5 +1,5 @@
 var codigoObligatorio;
-
+var variable ='variable';
 var initonsucentregacliente = function() {
 	$('#onsucentregacliente').click(function(){
 		$('#accesoriosOTCliente').recalcLayout();
