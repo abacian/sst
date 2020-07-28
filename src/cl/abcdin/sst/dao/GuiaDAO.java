@@ -4,6 +4,8 @@ import java.util.List;
 
 import cl.abcdin.sst.model.Documento;
 import cl.abcdin.sst.model.Guia;
+import cl.abcdin.sst.model.GuiaGetPDFWS;
+import cl.abcdin.sst.model.GuiaWebService;
 import cl.abcdin.sst.model.filters.FilterGuia;
 import cl.abcdin.sst.model.filters.FilterGuiasPendientes;
 import cl.abcdin.sst.model.filters.GridControl;
@@ -120,5 +122,48 @@ public class GuiaDAO extends BaseDAO {
 	
 	public Integer getGuiasToUbicacionDiezMilByidDespacho(Long idDespacho) throws Exception {
 		return getSqlSessionTemplate().selectOne("guia.getGuiasToUbicacionDiezMilByidDespacho",idDespacho);
+	}
+	
+	public Integer getLastGuia()
+	{
+	 return getSqlSessionTemplate().selectOne("guiaWebService.lastGuia");
+	}
+	
+	public Integer getLastCorrelativo()
+	{
+	 return getSqlSessionTemplate().selectOne("guiaWebService.lastCorrelativo");
+	}
+	
+	public GuiaWebService datosTrasladoInterno(Long iguia) throws Exception {
+		return getSqlSessionTemplate().selectOne("guiaWebService.getRequestTI",iguia);
+	}
+	
+	public GuiaWebService datosTrasladoCliente(Long iguia) throws Exception {
+		return getSqlSessionTemplate().selectOne("guiaWebService.getRequestForClient",iguia);
+	}
+	
+	public GuiaWebService datosTrasladoServicioTecnico(Long iguia) throws Exception {
+		return getSqlSessionTemplate().selectOne("guiaWebService.getRequestForSTA",iguia);
+	}
+	
+	public GuiaGetPDFWS findDocumento(Long idGuia) throws Exception {
+		return getSqlSessionTemplate().selectOne("guiaGetPDFWS.getRequestForPdf",idGuia);
+	}
+	
+	public Integer updateCorrelativo(Guia guia)throws Exception{
+		return getSqlSessionTemplate().update("guiaWebService.updateCorrelativo",guia);
+		
+	}
+	
+	public Integer updateInumero(Guia guia) throws Exception {
+		return getSqlSessionTemplate().update("guiaWebService.updateById",guia);
+	}
+	
+	public Integer updateIdDestino(Guia guia) throws Exception{
+		return getSqlSessionTemplate().update("guia.updateDestino",guia);
+	}
+	
+	public Guia getGuiaByIdGuia(Long idGuia)throws Exception {
+		return getSqlSessionTemplate().selectOne("guia.getGuiaByIdGuia", idGuia);
 	}
 }

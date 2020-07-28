@@ -1415,6 +1415,7 @@
 		<if test="sucursal!=null and sucursal.id!=null">
 			,ot.id_sucursal = #{sucursal.id}
 		</if>
+		,ot.s_giro_empresa= #{giroEmpresa}
 	    where ot.id_ot = #{id}
 	</update>
 	
@@ -1543,6 +1544,8 @@
 		where ot.id_ot = #{id}
 	</update>
 	
+	
+	
 	<resultMap type="OrdenTrabajo" id="getOTRecibeSucursalResult">
 		<result property="id" column="id_ot"/>
 		<result property="descripcionEstado" column="s_descripcion"/>
@@ -1571,6 +1574,13 @@
 			ot.s_contrato 
 		from sstt_ordenes_trabajo ot 
 		where ot.id_ot = #{guia.ordenTrabajo.id}
+	</select>
+	
+	<select id="getTipoOT" parameterType="Long" resultType="String">
+		select 
+			S_TIPO_DOCUMENTO 
+		from  SSTT_ORDENES_TRABAJO 
+		where id_ot = #{id}
 	</select>
 	
 	<update id="updateOTRevision" parameterType="OrdenTrabajo">

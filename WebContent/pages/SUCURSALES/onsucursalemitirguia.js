@@ -15,7 +15,7 @@ $(document).ready(function() {
 		p.orderBy = $('#' + nombreGrilla).getSortName()[0];
 		p.sortOrder = $('#' + nombreGrilla).getSortOrder()[0];
 		var f = $('#' + nombreGrilla).getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=GuiaPendienteReport" +
 			"&filterColumn=" + JSON.stringify(f) + 
 			"&filter=" + JSON.stringify(p);
@@ -27,7 +27,7 @@ $(document).ready(function() {
 		p.orderBy = $('#guiasFF').getSortName()[0];
 		p.sortOrder = $('#guiasFF').getSortOrder()[0];
 		var f = $('#guiasFF').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=GuiaPendienteAgrupadaReport" +
 			"&filterColumn=" + JSON.stringify(f) + 
 			"&filter=" + JSON.stringify(p);

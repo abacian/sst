@@ -155,7 +155,7 @@ var reemitirDetalleGuia = function(id){
 var imprimirGuia = function(id){
 	SSTFacade.validaStockGuiaAgrupada(idGuia,{async:false, callback:function(existe){
 		if(existe){
-			var url = "/sst/ViewReportServlet?type=pdf" + 
+			var url = "/sstnew/ViewReportServlet?type=pdf" + 
 			"&report=GuiaAgrupadaGIMReport" +
 			"&idGuia=" + id;
 			$.openWindowsMenubar(url, "GuiaAgrupadaGIMReport", 600, 800);

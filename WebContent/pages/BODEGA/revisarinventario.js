@@ -23,7 +23,7 @@ $(document).ready(function() {
 		p.orderBy = $('#productosInventariados').getSortName()[0];
 		p.sortOrder = $('#productosInventariados').getSortOrder()[0];
 		var f = $('#productosInventariados').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=ProductosInventarioReport" +
 			"&filter=" + JSON.stringify(p) +
 			"&filterColumn=" + JSON.stringify(f);

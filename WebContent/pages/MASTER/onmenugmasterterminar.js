@@ -65,7 +65,7 @@ $(document).ready(function(){
 	
 	$('#imprimir').click(function(){
 		$('#imprimir').click( function(){
-			var url = "/sst/ViewReportServlet?type=pdf" + 
+			var url = "/sstnew/ViewReportServlet?type=pdf" + 
 			"&report=OrdenTrabajoDetalleReport" +
 			"&idOT=" + idOT;
 			$.openWindowsMenubar(url, "OrdenTrabajoDetalle", 600, 800);

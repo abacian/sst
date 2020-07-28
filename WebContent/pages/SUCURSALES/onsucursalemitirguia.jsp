@@ -15,7 +15,8 @@
 				<div id="tabs">
 					<ul>
 						<li id="onguiasSTReparacionTab"><a href="#onguiasSTReparacionPanel">S. Técnico - Reparación</a></li>
-						<li id="onguiasSTCambioTab"><a href="#onguiasSTCambioPanel">S. Técnico - Cambios</a></li>
+						<!-- TAB DESHABILITADO -->
+						<!-- <li id="onguiasSTCambioTab"><a href="#onguiasSTCambioPanel">S. Técnico - Cambios</a></li> -->
 						<!-- CU-11 SST DESHABILITAR  TAB-->
 						<!--  <li id="onguiasFFTab"><a href="#onguiasFFPanel">Fallas de Fabricación</a></li> -->
 						<li id="onguiasClienteTab"><a href="#onguiasClientePanel">Cliente</a></li>
@@ -27,13 +28,13 @@
 							</div>
 						</form>
 					</div>
-					<div id="onguiasSTCambioPanel">
+					<!-- <div id="onguiasSTCambioPanel">
 						<form class="formTab">
 							<div class="marco_interior_tabla">
 								<div id="guiasSTCambio"></div>
 							</div>
 						</form>
-					</div>
+					</div> -->
 					<!-- div id="onguiasFFPanel">
 						<form class="formTab">
 							<div class="marco_interior_tabla">

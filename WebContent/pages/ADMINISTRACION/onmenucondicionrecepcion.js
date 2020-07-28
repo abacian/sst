@@ -15,7 +15,7 @@ $(document).ready(function() {
 	});
 	
 	$("#imprimir").click(function(){
-		var url = "/sst/ViewReportServlet?type=pdf" + 
+		var url = "/sstnew/ViewReportServlet?type=pdf" + 
 			"&report=CondicionRecepcionReport";
 		$.openWindowsMenubar(url, "CondicionRecepcion", 600, 800);
 	});

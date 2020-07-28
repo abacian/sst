@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://java.sun.com/xml/ns/javaee" xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" id="WebApp_ID" version="2.5">
-	<display-name>sst</display-name>
+	<display-name>sstnew</display-name>
 	<welcome-file-list>
 		<welcome-file>login.jsp</welcome-file>
 	</welcome-file-list>
@@ -15,6 +15,11 @@
 		<param-name>contextConfigLocation</param-name>
 		<param-value>classpath:/cl/abcdin/sst/conf/application-context.xml</param-value>
 	</context-param>
+	<context-param>
+		<param-name>webAppRootKey</param-name>
+		<param-value>SSTPRUEBA</param-value>
+	</context-param>
+	
 	<listener>
 		<listener-class>org.springframework.web.util.Log4jConfigListener</listener-class>
 	</listener>
@@ -36,6 +41,7 @@
 			<param-name>crossDomainSessionSecurity</param-name>
 			<param-value>false</param-value>
 		</init-param>
+		
 		<init-param>
 			<param-name>config-dwr</param-name>
 			<param-value>/WEB-INF/dwrBase.xml</param-value>

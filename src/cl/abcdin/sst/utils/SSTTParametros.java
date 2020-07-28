@@ -24,7 +24,7 @@ public final class SSTTParametros {
 	 * <p>
 	 * Registro de versiones:
 	 * <ul>
-	 * <li>1.0 XX/YY/2017, (ACL SPA) - versión inicial
+	 * <li>1.0 XX/YY/2017, (ACL SPA) - version inicial
 	 * </ul>
 	 * <p>
 	 * 
@@ -40,7 +40,7 @@ public final class SSTTParametros {
 	 * <p>
 	 * Registro de versiones:
 	 * <ul>
-	 * <li>1.0 XX/YY/2017, (ACL SPA) - versión inicial
+	 * <li>1.0 XX/YY/2017, (ACL SPA) - version inicial
 	 * </ul>
 	 * <p>
 	 * 
@@ -62,7 +62,7 @@ public final class SSTTParametros {
 	 * <p>
 	 * Registro de versiones:
 	 * <ul>
-	 * <li>1.0 XX/YY/2017, (ACL SPA) - versión inicial
+	 * <li>1.0 XX/YY/2017, (ACL SPA) - version inicial
 	 * </ul>
 	 * <p>
 	 * 
@@ -89,7 +89,7 @@ public final class SSTTParametros {
 	 * <p>
 	 * Registro de versiones:
 	 * <ul>
-	 * <li>1.0 XX/YY/2017, (ACL SPA) - versión inicial
+	 * <li>1.0 XX/YY/2017, (ACL SPA) - version inicial
 	 * </ul>
 	 * <p>
 	 * 
@@ -106,7 +106,7 @@ public final class SSTTParametros {
 	 * <p>
 	 * Registro de versiones:
 	 * <ul>
-	 * <li>1.0 XX/YY/2017, (ACL SPA) - versión inicial
+	 * <li>1.0 XX/YY/2017, (ACL SPA) - version inicial
 	 * </ul>
 	 * <p>
 	 * Metodo que retorna el parametro ligado al codigo dado

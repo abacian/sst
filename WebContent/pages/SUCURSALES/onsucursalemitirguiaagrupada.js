@@ -75,7 +75,7 @@ $(document).ready(function() {
 	$('#imprimir').click(function(){
 		SSTFacade.validaStockGuiaAgrupada(idGuia,{async:false, callback:function(existe){
 			if (existe == true) {
-				var url = "/sst/ViewReportServlet?type=pdf" + 
+				var url = "/sstnew/ViewReportServlet?type=pdf" + 
 				"&report=GuiaAgrupadaReport" +
 				"&idGuia=" + idGuia;
 				$.openWindowsMenubar(url, "GuiaAgrupadaReport", 600, 800);
@@ -173,7 +173,7 @@ $(document).ready(function() {
 		p.orderBy = $('#ots').getSortName()[0];
 		p.sortOrder = $('#ots').getSortOrder()[0];
 		var f = $('#ots').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=OrdenTrabajoCambioAutomaticoReport" +
 			"&filter=" + JSON.stringify(p) +
 			"&filterColumn=" + JSON.stringify(f);

@@ -23,6 +23,11 @@ public class OrdenTrabajoDAO extends BaseDAO {
 	public List<OrdenTrabajo> listByFilter(FilterOT filterOT, GridControl gridControl) throws Exception {
 		return getSqlSessionTemplate().selectList("ordenTrabajo.listByFilter", filterOT, gridControl.getRowBounds());
 	}
+	
+	public String getTipoOT(Long idOT)
+	{
+		return getSqlSessionTemplate().selectOne("ordenTrabajo.getTipoOT");
+	}
 
 	public List<OrdenTrabajo> listByFilter(FilterOT filterOT) throws Exception {
 		return getSqlSessionTemplate().selectList("ordenTrabajo.listByFilter", filterOT);

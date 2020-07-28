@@ -134,6 +134,24 @@ public class SSTFacade {
 		return administracionService.isProductoOnUbicacionInternaCD(idProducto, codigoUbicacion);
 	}
 	
+	
+	public String getTipoOt(Long idOt)
+	{
+		return sucursalService.getTipoOT(idOt);
+	}
+	
+	
+	
+	public String getPDFSucursal(String idGuia) throws Exception{
+		return sucursalService.getPDFSucursal(idGuia);
+	}
+	
+	public int anularGuiaWs(String idGuia) throws Exception {
+		return sucursalService.anularGuiaWS(idGuia);
+	}
+	
+	
+	
 	public void sucursalesAreAvailable(List<String> familias, List<String> lineas, List<Integer> productos, List<Integer> sucursales, UbicacionInternaDetalle ubicacionInternaDetalle) throws Exception{
 		administracionService.sucursalesAreAvailable(familias, lineas, productos, sucursales, ubicacionInternaDetalle);
 	}
@@ -1392,8 +1410,8 @@ public class SSTFacade {
 		return sucursalService.listTipoFallasByOT(idOT);
 	}
 
-	public Guia emitirGuia(Long idOT, Guia guia, ServicioTecnico servicioTecnico) throws Exception {
-		return sucursalService.emitirGuia(idOT, guia, servicioTecnico, getUsuarioSession(), getUbicacionSession());
+	public Guia emitirGuia(Long idOT, Guia guia, ServicioTecnico servicioTecnico, Long numero) throws Exception {
+		return sucursalService.emitirGuia(idOT, guia, servicioTecnico, getUsuarioSession(), getUbicacionSession(), numero);
 	}
 	
 	public Guia emitirGuiaAccesorio(Long idOT, Guia guia) throws Exception {
@@ -1468,9 +1486,11 @@ public class SSTFacade {
 		return sucursalService.saveCliente(cliente);
 	}
 	
-	public OrdenTrabajo terminarOrdenTrabajo(Cliente cliente, OrdenTrabajo oT, Ubicacion origen) throws Exception {
-		return sucursalService.terminarOrdenTrabajo(cliente,oT,getUbicacionSession());
+	public OrdenTrabajo terminarOrdenTrabajo(Cliente cliente, OrdenTrabajo oT,String giroEmpresa, Ubicacion origen) throws Exception {
+		return sucursalService.terminarOrdenTrabajo(cliente,oT,getUbicacionSession(),giroEmpresa);
 	}
+	
+	
 	
 	public List<Parte> listPartesByFilter(FilterParte filter) throws Exception {
 		return sucursalService.listPartesByFilter(filter);
@@ -1812,8 +1832,8 @@ public class SSTFacade {
 		return bodegaService.getOTRevisaSalaProveedores(filter);
 	}
 	
-	public ServicioTecnico saveServicioTecnico(Ubicacion ubicacion) throws Exception {
-		return bodegaService.saveServicioTecnico(ubicacion);
+	public ServicioTecnico saveServicioTecnico(Ubicacion ubicacion, String rznsoc) throws Exception {
+		return bodegaService.saveServicioTecnico(ubicacion,rznsoc);
 	}
 
 	public ListRange listOTByFilter(FilterOT filterOT, GridControl gridControl) throws Exception {

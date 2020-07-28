@@ -247,7 +247,7 @@ var reemitir = function(id){
 var imprimir = function(id){
 	SSTFacade.validaStockGuiaAgrupada(id,{async:false, callback:function(existe){
 		if(existe){
-			var url = "/sst/ViewReportServlet?type=pdf" + 
+			var url = "/sstnew/ViewReportServlet?type=pdf" + 
 			"&report=GuiaAgrupadaGIMReport" +
 			"&idGuia=" + id;
 			$.openWindowsMenubar(url, "GuiaAgrupadaGIMReport", 600, 800);

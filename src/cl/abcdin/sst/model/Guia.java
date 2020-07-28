@@ -25,8 +25,19 @@ public class Guia {
 	private Integer numeroTSTO;
 	private Integer numeroTO;
 	private Boolean procesadoOW;
+	private Integer corr;
+	
+	public Integer getCorr()
+	{
+		return corr;
+	}
+	
+	public void setCorr(Integer corr)
+	{
+		this.corr=corr;
+	}
 
-
+	
 	public Long getId() {
 		return id;
 	}

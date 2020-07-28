@@ -1,5 +1,6 @@
 var ordenTrabajo;
 
+
 $(document).ready(function(){
 	$('#tabs').hide();
 	var idOT = parseInt($('#idOT').val());

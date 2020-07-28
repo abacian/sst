@@ -112,9 +112,10 @@ var initonsucentregacliente = function() {
 				}
 			};
 			var accesorios = $("#accesoriosOTCliente").getJSONFromHTML();
-			
+			debugger;
 			SSTFacade.updateClienteAceptaProducto(accesorios, ot,{async:true,callback:function(msg){
 				$('#clienteRechaza,#cambioFalla,#clienteAcepta').attr('disabled',true);
+				$('#btnTicketCambio').val('Generar ticket de cambio')
 				$('#btnTicketCambio').attr('disabled',false);
 				//$.alerts.okButton = '&nbsp;OK&nbsp;';
 				//jAlert(msg,'Información',function(){
@@ -201,17 +202,22 @@ var initonsucentregacliente = function() {
 			}});
 			
 			if(ordenTrabajo.ticketCambio != null){
-				var url = "/sst/ViewReportServlet?type=pdf" + 
+				var url = "/sstnew/ViewReportServlet?type=pdf" + 
 				"&report=TicketCambioReport" +
 				"&idOT=" + ordenTrabajo.id;
 				$.openWindowsMenubar(url,"TicketCambioReport", 600, 800);
 			}
 		} else if (ordenTrabajo.ticketCambio != null) {
-			var url = "/sst/ViewReportServlet?type=pdf" + 
+			var url = "/sstnew/ViewReportServlet?type=pdf" + 
 			"&report=TicketCambioReport" +
 			"&idOT=" + ordenTrabajo.id;
 			$.openWindowsMenubar(url,"TicketCambioReport", 600, 800);
+		} else if (ordenTrabajo.ticketCambio==null)
+		{
+			$('#btnTicketCambio').val('Generar ticket de cambio');	
 		}
+		
+		//Si el ticket de cambio no existe, se genera.
 	});
 	//--------------------------------------------------------------
 };

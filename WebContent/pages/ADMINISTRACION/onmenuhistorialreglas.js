@@ -45,7 +45,7 @@ $(document).ready(function() {
 		p.orderBy = $('#reglasComerciales').getSortName()[0];
 		p.sortOrder = $('#reglasComerciales').getSortOrder()[0];
 		var f = $('#reglasComerciales').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=ReglasComercialesHistoricasReport" +
 			"&filter=" + JSON.stringify(p) + // + getParametros(form);
 			"&filterColumn=" + JSON.stringify(f);

@@ -1,5 +1,5 @@
 <title>ABCDIN :: Sistema Servicio Tecnico</title>
-<script type="text/javascript" src="<%=request.getContextPath()%>/pages/header.js?<%= version %>"></script>
+<script type="text/javascript" src="<%=request.getContextPath()%>/pages/header.js?"></script>
 <div class="header">
 	<table style="width: 100%">
 		<tr>
@@ -7,7 +7,7 @@
 				<div style="text-align: center; width: 175px !important">
 					<img alt="" src="<%=request.getContextPath()%>/images/logo_nuevo.png">
 <!-- 					Para cambiar la version del sistema, modificar el archivo version.jsp -->
-					<label><%= version %></label>
+					<label>5.4.6</label>
 				</div>
 			</td>
 			<td class="header_center">

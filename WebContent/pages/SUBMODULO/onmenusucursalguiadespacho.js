@@ -55,15 +55,34 @@ var initonmenusucursalguiadespacho = function() {
 		$.alerts.cancelButton = '&nbsp;Cancelar&nbsp;';
 		jConfirm('Al re emitir una guía de despacho se desactiva la guia anterior y se crea una nueva guia de despacho para la orden de trabajo. </br> ¿Esta seguro de bloquear esta guía de despacho y crear una nueva?', 'Confirmación', function(r){
 			if (r) {
-				if(guiaAux.tipoGuia == 'GACC'){
-					SSTFacade.reEmitirGuiaAccesorio(ordenTrabajo.id, guia,{async:true,callback:function(g){
-						parent.location = context + "/index.do?e=" + moduloDetalle.codigo + "&m=" + moduloInicial.codigo + "&idOT=" + ordenTrabajo.id + "&idGuia=" + g.id;
-					}});
-				}else{
-					SSTFacade.reEmitirGuia(ordenTrabajo.id, guia, null, {async:true,callback:function(g){
-						parent.location = context + "/index.do?e=" + moduloDetalle.codigo + "&m=" + moduloInicial.codigo + "&idOT=" + ordenTrabajo.id + "&idGuia=" + g.id;
-					}});
-				}
+
+                if(guia.numero<20000)
+                {
+                    SSTFacade.anularGuiaWs(idGuia,{async:false,callback:function(codigo){
+                        if (codigo == 101 || codigo == 0) {
+                            console.log("entre al if, la lista no es null");
+                            console.log("entre al if: "+ codigo);
+                            
+                            if(guiaAux.tipoGuia == 'GACC'){
+                                console.log("entre al if GAAC");
+                                SSTFacade.reEmitirGuiaAccesorio(ordenTrabajo.id, guia,{async:true,callback:function(g){
+                                    parent.location = context + "/index.do?e=" + moduloDetalle.codigo + "&m=" + moduloInicial.codigo + "&idOT=" + ordenTrabajo.id + "&idGuia=" + g.id;
+                                }});
+                            }else{
+                                console.log("entre al else GAAC");
+                                SSTFacade.reEmitirGuia(ordenTrabajo.id, guia, null, {async:true,callback:function(g){
+                                    parent.location = context + "/index.do?e=" + moduloDetalle.codigo + "&m=" + moduloInicial.codigo + "&idOT=" + ordenTrabajo.id + "&idGuia=" + g.id;
+                                }});
+                            }
+                            
+                        }
+                        }});
+                }
+                else
+                {
+                    SSTFacade.reEmitirGuia(ordenTrabajo.id, guia, null, {async:true,callback:function(g){
+                        parent.location = context + "/index.do?e=" + moduloDetalle.codigo + "&m=" + moduloInicial.codigo + "&idOT=" + ordenTrabajo.id + "&idGuia=" + g.id;}});
+                }
 			}
 		});
 	};
@@ -97,7 +116,7 @@ var initonmenusucursalguiadespacho = function() {
 		if (ordenTrabajo.procesadoOW) {
 			SSTFacade.validaStockGuiaUnitaria(idGuia,ordenTrabajo.id,{async:false,callback:function(existe){
 				if (existe == true) {
-					var url = "/sst/ViewReportServlet?type=pdf" + 
+					var url = "/sstnew/ViewReportServlet?type=pdf" + 
 					"&report=GuiaDetalleReport" +
 					"&idOT=" + ordenTrabajo.id + 
 					"&idGuia=" + idGuia;
@@ -115,11 +134,52 @@ var initonmenusucursalguiadespacho = function() {
 				}
 			}});	
 		} else {
-			var url = "/sst/ViewReportServlet?type=pdf" + 
-			"&report=GuiaDetalleReport" +
-			"&idOT=" + ordenTrabajo.id + 
-			"&idGuia=" + idGuia;
-			$.openWindowsMenubar(url, "GuiaDetalleReport", 600, 800);
+			SSTFacade.getPDFSucursal(idGuia,{async:false,callback:function(documento){
+				if (documento != null) {
+					console.log("entre al if, la lista no es null");
+					var url = "/sstnew/CustomerETDPDFServlet?type=pdf&report=GuiaDetalleReport&documento="+documento;
+					console.log(documento)
+					
+					/*var xhr = new XMLHttpRequest();
+				    xhr.onreadystatechange = function() {
+				        if (xhr.readyState == 4) {
+				            var data = xhr.responseText;
+				            alert(data);
+				        }
+				    }
+				    xhr.open('GET', "/sstV/CustomerETDPDFServlet?type=pdf&report=GuiaDetalleReport&documento="+documento, true);
+				    xhr.send();
+				    var doc = xhttp.responseText; 
+				    console.log(doc);
+				    */
+				    
+					var objbuilder = '';
+				    objbuilder += ('<object width="100%" height="100%"      data="data:application/pdf;base64,');
+				    objbuilder += (documento);
+				    objbuilder += ('" type="application/pdf" class="internal">');
+				    objbuilder += ('<embed src="data:application/pdf;base64,');
+				    objbuilder += (documento);
+				    objbuilder += ('" type="application/pdf" />');
+				    objbuilder += ('</object>');
+
+				    var win = window.open("","_blank","titlebar=yes");
+				        win.document.title = "My Title";
+				        win.document.write('<html><body>');
+				        win.document.write(objbuilder);
+				        win.document.write('</body></html>');
+				        layer = jQuery(win.document);
+					
+				}else{
+					console.log("entre al else");
+                    var url = "/sstnew/CustomerETDPDFServlet?type=pdf&report=GuiaDetalleReport";
+				}
+                                //$.openWindowsMenubar(url, "GuiaDetalleReport", 600, 800);
+                               // window.open(url,
+        //'open_window',
+        //'menubar=no, toolbar=no, location=no, directories=no, status=no, scrollbars=no, resizable=no, dependent, width=800, height=620, left=0, top=0')
+				
+			
+			}});
 		}
 	});
 };
@@ -196,6 +256,8 @@ var loadonmenusucursalguiadespacho = function(ordenTrabajo) {
 			switch (guia.estado.id) {
 				case 50001000:
 					$('#grabar').attr('disabled', false);
+					document.getElementById('numero').value="";
+					document.getElementsByClassName('num')[0].value="";
 					if(!ordenTrabajo.procesadaOW){
 						$('#confirmar').hide();
 					}

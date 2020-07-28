@@ -26,7 +26,7 @@ $(document).ready(function() {
 		p.orderBy = $('#grillainformacionadicional').getSortName()[0];
 		p.sortOrder = $('#grillainformacionadicional').getSortOrder()[0];
 		var f = $('#grillainformacionadicional').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=ProcedimientoProveedorReport" +
 			"&filter=" + JSON.stringify(p) +
 			"&filterColumn=" + JSON.stringify(f);

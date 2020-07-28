@@ -71,6 +71,7 @@ public class UbicacionDAO extends BaseDAO {
 		return getSqlSessionTemplate().update("ubicacion.updateUbicacion", ubicacion);
 	}
 	
+	
 	public Integer updateVigenciaUbicacion(Ubicacion ubicacion) throws Exception{
 		return getSqlSessionTemplate().update("ubicacion.updateVigencia", ubicacion);
 	}

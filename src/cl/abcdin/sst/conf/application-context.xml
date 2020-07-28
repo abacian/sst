@@ -375,8 +375,8 @@
 	</bean>
 		
 	
-  	<bean id="loginService" class="cl.abcdin.sst.login.service.LoginService"> 
-<!--    <bean id="loginService" class="cl.abcdin.sst.login.service.LoginServiceDummy"> -->
+  	<bean id="loginService" class="cl.abcdin.sst.login.service.LoginService">
+<!-- 	<bean id="loginService" class="cl.abcdin.sst.login.service.LoginServiceDummy">    -->
 		<property name="loginDAO"                    ref="loginDAO"/>
 		<property name="initialContextFactory"       value="com.sun.jndi.ldap.LdapCtxFactory"/>
 		<property name="providerURLPrimary"          value="ldap://eserver.din.cl:389"/>

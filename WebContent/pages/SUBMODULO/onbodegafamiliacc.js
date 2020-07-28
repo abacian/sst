@@ -8,7 +8,7 @@ var initonbodegafamiliacc = function(){
 		p.orderBy = $('#familias').getSortName()[0];
 		p.sortOrder = $('#familias').getSortOrder()[0];
 		var f = $('#familias').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=FamiliaExcluidaCCReport" +
 			"&filter=" + JSON.stringify(p) + 
 			"&filterColumn=" + JSON.stringify(f);

@@ -23,35 +23,43 @@ public class BitacoraDAO extends BaseDAO {
 		return getSqlSessionTemplate().selectOne("bitacora.getByIdGuia", idGuia);
 	}
 	
-	public Bitacora getBitacoraAccesorioByIdGuia(Long idGuia) throws Exception {
+	public Bitacora getBitacoraAccesorioByIdGuia(Long idGuia) throws Exception 
+        {
 		return getSqlSessionTemplate().selectOne("bitacora.getBitacoraAccesorioByIdGuia", idGuia);
 	}
 	
-	public Bitacora getByIdGuiaAgrupadaAndOT(FilterOT filterOT) throws Exception {
+	public Bitacora getByIdGuiaAgrupadaAndOT(FilterOT filterOT) throws Exception 
+        {
 		return getSqlSessionTemplate().selectOne("bitacora.getByIdGuiaAgrupadaAndOT", filterOT);
 	}
 	
-	public Integer deleteBitacoraMayoresByOT(Bitacora bitacora) throws Exception {
+	public Integer deleteBitacoraMayoresByOT(Bitacora bitacora) throws Exception 
+        {
 		return getSqlSessionTemplate().delete("bitacora.deleteBitacoraMayoresByOT", bitacora);
 	}
 	
-	public Integer deleteBitacoraAccesoriosMayoresByOT(Bitacora bitacora) throws Exception {
+	public Integer deleteBitacoraAccesoriosMayoresByOT(Bitacora bitacora) throws Exception 
+        {
 		return getSqlSessionTemplate().delete("bitacora.deleteBitacoraAccesoriosMayoresByOT", bitacora);
 	}
 	
-	public Integer updateFechaSalida (Bitacora bitacora) throws Exception {
+	public Integer updateFechaSalida (Bitacora bitacora) throws Exception 
+        {
 		return getSqlSessionTemplate().update("bitacora.updateFechaSalida", bitacora);	
 	}
 	
-	public Integer updateFechaSalidaBitacoraAccesorio (Bitacora bitacora) throws Exception {
+	public Integer updateFechaSalidaBitacoraAccesorio (Bitacora bitacora) throws Exception 
+        {
 		return getSqlSessionTemplate().update("bitacora.updateFechaSalidaBitacoraAccesorio", bitacora);	
 	}
 	
-	public Integer save(Bitacora bitacora) throws Exception {
+	public Integer save(Bitacora bitacora) throws Exception 
+        {
 		return getSqlSessionTemplate().insert("bitacora.save", bitacora);	
 	}
 	
-	public Integer saveBitacoraAccesorios(Bitacora bitacora) throws Exception {
+	public Integer saveBitacoraAccesorios(Bitacora bitacora) throws Exception 
+        {
 		return getSqlSessionTemplate().insert("bitacora.saveBitacoraAccesorios", bitacora);	
 	}
 	

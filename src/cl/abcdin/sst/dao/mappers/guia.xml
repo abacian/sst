@@ -257,6 +257,62 @@
 		</where>
 	</select>
 	
+	
+	<resultMap type="Guia" id="guiaResp">
+<result column="ID_GUIA"                            property="id"/>    
+<result column="ID_ESTADO"                          property="estado"/>    
+<result column="ID_OT"                              property="ordenTrabajo"/>
+<result column="ID_ORIGEN"                          property="origen"/>    
+<result column="ID_DESTINO"                         property="destino"/>        
+<result column="ID_USUARIO"                         property="usuario"/>        
+<result column="ID_TRANSPORTISTA"                   property="transportista"/>            
+<result column="I_NUMERO"                           property="numero"/>    
+<result column="D_FECHA_EMISION"                    property="fechaEmision"/>            
+<result column="D_FECHA_REGISTRO"                   property="fechaRegistro"/>            
+<result column="S_PATENTE"                          property="transportista"/>    
+<result column="S_VIGENTE"                          property="vigente"/>    
+<result column="S_OBSERVACION"                      property="observacion"/>        
+<result column="S_ENTREGA_CLIENTE"                  property="entregaCliente"/>            
+<result column="D_FECHA_IMPRESION"                  property="fechaEntrega"/>            
+<result column="ID_ESTADO_ACTUAL"                   property="estadoActual"/>            
+<result column="D_FECHA_ULTIMO_ESTADO"              property="fechaUltimoEstado"/>                
+<result column="S_TIPO_GUIA"                        property="tipoGuia"/>                                
+<result column="S_PROCESADO_OW"                     property="procesadoOW"/>        
+<result column="I_NMRO_TS_TO"                       property="numeroTSTO"/>        
+<result column="I_NMRO_TO"                          property="numeroTO"/>        
+<result column="ID_DESPACHO_INTERNO_CAMION"         property="despachoInternoCamion"/>
+</resultMap>
+
+	<select id="getGuiaByIdGuia" parameterType="Long" resultMap="guiaResp">
+		select
+			ID_GUIA,
+			ID_ESTADO,
+			ID_OT,
+			ID_ORIGEN,
+			ID_DESTINO,
+			ID_USUARIO,
+			ID_TRANSPORTISTA,
+			I_NUMERO,
+			D_FECHA_EMISION,
+			D_FECHA_REGISTRO,
+			S_PATENTE,
+			S_VIGENTE,
+			S_OBSERVACION,
+			S_ENTREGA_CLIENTE,
+			D_FECHA_IMPRESION,
+			ID_ESTADO_ACTUAL,
+			D_FECHA_ULTIMO_ESTADO,
+			S_TIPO_GUIA,
+			S_PROCESADO_OW,
+			I_NMRO_TS_TO,
+			I_NMRO_TO,
+			ID_DESPACHO_INTERNO_CAMION
+		from sstt_guias
+		<where>
+			id_guia = #{id}
+		</where>
+	</select>
+	
 	<select id="getByNumero" parameterType="Long" resultMap="guia">
 		select 
 			g.id_guia
@@ -328,6 +384,15 @@
 				,id_despacho_interno_camion = #{despachoInternoCamion.id}
 			</if>	
 		where id_guia = #{id}
+	</update>
+	
+	<update id="updateDestino" parameterType="Guia">
+		UPDATE SSTT_GUIAS SET 
+			ID_DESTINO=#{destino.id}
+			
+			<where>
+			id_guia = #{id}
+			</where>
 	</update>
 	
 	<update id="updateEstado" parameterType="Guia">

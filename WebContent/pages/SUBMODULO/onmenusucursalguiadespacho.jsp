@@ -13,7 +13,7 @@
 					<td width="50%">
 						<fieldset class="">
 							<label for="id">N° Guía despacho</label>
-							<input id="numero" name="numero" type="text" maxlength="10" class="required number">
+							<input id="numero" name="numero" type="text" maxlength="10" disabled >
 							
 							<label for="fechaEmision">Fecha de Emision</label>
 							<input type="text" name="fechaEmision" id="fechaEmision" format="dd/MM/yyyy HH:mm" class="fechaHora dateTimeDDMMYYYYhhmm required" />
@@ -40,8 +40,8 @@
 				<tr>
 					<td width="50%">
 						<fieldset class="">
-							<label for="id">N° Guía despacho</label>
-							<input id="numero" name="numero" type="text" maxlength="10" class="required number">
+								<label for="id">N° Guía despacho</label>
+							<input id="numero" name="numero" type="text" maxlength="10" disabled class="num">
 							
 							<label for="fechaEmision">Fecha de Emision</label>
 							<input type="text" name="fechaEmision" id="fechaEmision" format="dd/MM/yyyy HH:mm" class="fechaHora dateTimeDDMMYYYYhhmm required" />
@@ -61,10 +61,10 @@
    			<tr>
    				<td width="100%">
    					<fieldset class="fieldset_botonera_center">
-   						<input type="button" name="grabar" id="grabar" value="Grabar Guía" />
+   						<input type="button" name="grabar" 	 id="grabar" value="Grabar Guía" />
    						<input type="button" name="imprimir" id="imprimir" value="Imprimir Guía" />
    						<input type="button" name="reemitir" id="reemitir" value="Re emitir Guía" />
-   						<input type="button" name="confirmar" id="confirmar" value="Confirmar Emisión" />
+   						<input type="button" name="confirmar"id="confirmar" value="Confirmar Emisión"  style="display: none;" />
    					</fieldset>
    				</td>
    			</tr>

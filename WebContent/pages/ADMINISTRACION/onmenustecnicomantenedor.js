@@ -120,11 +120,14 @@ $(document).ready(function() {
 			Grabar: function() {
 				if($('#mantenedorStecnicoForm').valid()) {
 					var servTecnico = $('#mantenedorStecnicoForm').serializeObject();
+					var rznsoc=document.getElementById("rznsoc").value;
 					jConfirm('¿Esta seguro que desea grabar el Servicio tecnico?', 'Confirmación', function(r){
 						if (r) {
-							SSTFacade.saveServicioTecnico(servTecnico,function(){
+							
+							SSTFacade.saveServicioTecnico(servTecnico,rznsoc,function(){
 								$("#resultados").flexReload(servTecnico);
 								$('#mantenedorStecnico').dialog('close');
+								
 								jAlert('Servicio técnico grabado','Información');																
 							});
 						}

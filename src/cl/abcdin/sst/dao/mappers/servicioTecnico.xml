@@ -77,6 +77,8 @@
 		<result	property="vigente"				column="s_vigente"/>
 		<result property="cantidadProductos"	column="i_cantidad_productos"/>
 		<result property="region.orden"			column="i_orden"/>
+		<result property="rznsoc"				column="s_razon_social"/>
+		
 	</resultMap>
 	
 	<resultMap type="ServicioTecnicoProducto" id="servicioTecnicoProducto2">
@@ -163,6 +165,7 @@
       		,ub.s_nombre 
       		,ub.s_telefono
       		,ub.s_direccion
+      		,ub.s_razon_social
       		,c.id_comuna
       		,c.s_nombre as s_nombre_comuna
       		,r.id_region 

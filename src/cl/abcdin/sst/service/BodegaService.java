@@ -229,13 +229,19 @@ public class BodegaService {
 		}
 	}
 	
-	public ServicioTecnico saveServicioTecnico(Ubicacion ubicacion) throws Exception {
+	public ServicioTecnico saveServicioTecnico(Ubicacion ubicacion, String rznsoc) throws Exception {
 		try {
 			if(ubicacion.getId()== null || ubicacion.getId() == 0 ){
 				ubicacion.setTipo(Constants.UBICACION_SERVICIO_TECNICO);
 				ubicacion.setVigente(true);
+				//Setter rznsoc
+				ubicacion.setRznSoc(rznsoc);
+				
+				
 				ubicacionDAO.save(ubicacion);
 		    } else {
+		    	ubicacion.setRznSoc(rznsoc);
+		    	
 		    	ubicacionDAO.updateUbicacion(ubicacion);
 			}
 			ServicioTecnico servicioTecnico = servicioTecnicoDAO.getSTecnicoById(ubicacion.getId());

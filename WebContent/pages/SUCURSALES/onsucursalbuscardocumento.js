@@ -74,8 +74,7 @@ $(document).ready(function(){
 				    		btn.attr('value', 'Cambiar');
 				    		btn.attr('onclick', 'javascript: cambioPorValor(' + o.id + '); asignaOrigen("C6");');
 			    		}else if (o.cambioPor24h == true) {
-				    		btn.attr('value', 'Cambiar');
-				    		btn.attr('onclick', 'javascript: cambioMenor24Hrs(' + o.id + '); asignaOrigen("C7");');
+				    		btn.hide();
 			    		} else if(o.cambioAutorizadoProveedor == true) {
 				    		btn.attr('value', 'Cambiar');
 				    		btn.attr('onclick', 'javascript: cambioPorProveedor(' + o.id + '); asignaOrigen("C8");');
@@ -111,7 +110,7 @@ $(document).ready(function(){
 			    	if (o.enGarantiaProveedor == true) {
 			    		if (o.cambioPor24h == true) {
 			    			
-			    			str += 'Producto con autorización de cambio menor 24 horas <br> ';
+			    			str += 'Producto sin autorización de cambio (menor 24 horas) <br> ';
 			    		}
 			    		if (o.cambioAutorizadoProveedor == true) {
 			    			str += 'Producto con autorización de cambio del proveedor <br> ';
