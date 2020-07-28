@@ -10,7 +10,7 @@ public class Configuraciones {
 	
 	
         private static Properties props2;
-		private String prueba="variable de prueba";
+		private String prueba="variable de prueba2";
         public static String getString(String key) {
         	
         	System.out.println("metodo configuacionesgetString");
