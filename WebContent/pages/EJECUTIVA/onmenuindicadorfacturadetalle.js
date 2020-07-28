@@ -26,7 +26,7 @@ $(document).ready(function() {
 		p.orderBy = $('#facturas').getSortName()[0];
 		p.sortOrder = $('#facturas').getSortOrder()[0];
 		var f = $('#facturas').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=FacturacionDetalleReport" +
 			"&filter=" + JSON.stringify(p) + // + getParametros(form);
 			"&filterColumn=" + JSON.stringify(f);

@@ -63,7 +63,7 @@ $(document).ready(function() {
 	loadSubmodulosByPage('onmenuordentrabajo','tabs', true, ordenTrabajo, true);
 	
 	$('#imprimir').click( function(){
-		var url = "/sst/ViewReportServlet?type=pdf" + 
+		var url = "/sstnew/ViewReportServlet?type=pdf" + 
 		"&report=OrdenTrabajoDetalleReport" +
 		"&idOT=" + ordenTrabajo.id;
 		$.openWindowsMenubar(url, "OrdenTrabajoDetalle", 600, 800);

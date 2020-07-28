@@ -64,7 +64,7 @@ $(document).ready(function(){
 		p.orderBy = $('#resultadosRevisiones').getSortName()[0];
 		p.sortOrder = $('#resultadosRevisiones').getSortOrder()[0];
 		var f = $('#resultadosRevisiones').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=DespachosRevisionReport" +
 			"&filter=" + JSON.stringify(p) +
 			"&filterColumn=" + JSON.stringify(f);
@@ -101,7 +101,7 @@ $(document).ready(function(){
 		p.orderBy = $('#resultadosParaRevision').getSortName()[0];
 		p.sortOrder = $('#resultadosParaRevision').getSortOrder()[0];
 		var f = $('#resultadosParaRevision').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=OrdenTrabajoParaDespachoReport" +
 			"&filter=" + JSON.stringify(p) +
 			"&filterColumn=" + JSON.stringify(f);

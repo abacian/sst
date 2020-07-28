@@ -408,7 +408,7 @@ public abstract class Constants {
 	
 	public static final Long BODEGA_10000 = 10000L;
 	public static final String APTO_VENTA = "AV";
-	public static final String DAÑADO = "DA";
+	public static final String DAÃ‘ADO = "DA";
 	
 	public static final Integer SECCION_DETALLE_INDICADOR = 40001000;
 	public static final String DEVOLUCION = "CP";
@@ -548,8 +548,116 @@ public abstract class Constants {
 	public static final String SUCURSAL_FRANCHISE_PROVEEDOR = "SUCURSAL_FRANCHISE_PROVEEDOR";
 	public static final String LOGISTICA_INVERSA = "LOGISTICA_INVERSA";
 	public static final String CAMBIO_PRODUCTO_FALLA_REITERADA = "Cambio de Producto por falla reiterada";
-	public static final String CAMBIO_PRODUCTO_FALLA_VENTA_MENOR_24_HORAS = "Producto con autorización de cambio menor 24 horas";
+	public static final String CAMBIO_PRODUCTO_FALLA_VENTA_MENOR_24_HORAS = "Producto con autorizacion de cambio menor 24 horas";
 	public static final String CAMBIO_PRODUCTO_PROVEEDOR = "Cambio de Producto por Proveedor";
 	public static final String CAMBIO_CON_PRODUCTO_FISICO = "Cambio con producto fisico";
 	public static final String CAMBIO_SIN_PRODUCTO_FISICO = "Cambio sin producto fisico";
+	
+	
+
+	//Constantes Indicador tipo de traslado
+		public static final String TRASLADO_INTERNO="STI";
+		public static final String TRASLADO_SERVICIO_TECNICO="STA";
+		public static final String TRASLADO_CLIENTE="SEC";
+		
+		
+		//Archivo properties
+		//WS LOAD
+		public static final String WS_LOAD_PROTOCOL=Configuraciones.getString("ws.load.protocol");
+		public static final String WS_LOAD_WSDL=Configuraciones.getString("ws.load.wsdl");
+		public static final String WS_LOAD_HOST=Configuraciones.getString("ws.load.host");
+		public static final String WS_LOAD_SOAPACTION=Configuraciones.getString("ws.load.soapAction");
+		public static final String WS_LOAD_SECURITY_USERNAME=Configuraciones.getString("ws.load.securityUserName");
+		public static final String WS_LOAD_SECURITY_PASSWORD=Configuraciones.getString("ws.load.securityPassword");
+		public static final String WS_LOAD_SECURITY_NONCE=Configuraciones.getString("ws.load.securityNonce");
+		public static final String WS_LOAD_SECURITY_CREATED=Configuraciones.getString("ws.load.securityCreated");
+		public static final String WS_LOAD_VALOR_LIBRE_5_TRASLADO_INTERNO=Configuraciones.getString("ws.load.valorLibre5.interno");
+		public static final String WS_LOAD_VALOR_LIBRE_5_STA=Configuraciones.getString("ws.load.valorLibre5.sta");
+		public static final String WS_LOAD_VALOR_LIBRE_5_CLIENTE=Configuraciones.getString("ws.load.valorLibre5.cliente");
+
+		
+		public static final String WS_LOAD_TIPO_DTE=Configuraciones.getString("ws.load.tipoDTE");
+		public static final String WS_LOAD_VERSION=Configuraciones.getString("ws.load.version");
+		public static final String WS_LOAD_IND_TRASLADO_INTERNO=Configuraciones.getString("ws.load.indTrasladoInterno");
+		public static final String WS_LOAD_IND_TRASLADO_NO_INTERNO=Configuraciones.getString("ws.load.indTrasladoNoInterno");
+		public static final String WS_LOAD_MNT_NETO=Configuraciones.getString("ws.load.mntNeto");
+		public static final String WS_LOAD_TASA_IVA=Configuraciones.getString("ws.load.tasaIva");
+		public static final String WS_LOAD_IVA=Configuraciones.getString("ws.load.iva");
+		public static final String WS_LOAD_MNT_TOTAL=Configuraciones.getString("ws.load.mntTotal");
+		public static final String WS_LOAD_TIPO_CODIGO=Configuraciones.getString("ws.load.tipoCodigo");
+		public static final String WS_LOAD_QTY_ITEM=Configuraciones.getString("ws.load.qtyItem");
+		public static final String WS_LOAD_PRC_ITEM=Configuraciones.getString("ws.load.prcItem");
+		public static final String WS_LOAD_MONTO_ITEM=Configuraciones.getString("ws.load.montoItem");
+		
+		//WSLOAD NO Obligatorios
+		public static final String WS_LOAD_VALOR_LIBRE_IMPRIMIR_DESTINO=Configuraciones.getString("ws.load.imprimirDest");
+		public static final String WS_LOAD_VALOR_LIBRE2=Configuraciones.getString("ws.load.varLibre2");
+		public static final String WS_LOAD_VALOR_LIBRE3=Configuraciones.getString("ws.load.varLibre3");
+		public static final String WS_LOAD_VALOR_LIBRE4=Configuraciones.getString("ws.load.varLibre4");
+		public static final String WS_LOAD_VALOR_LIBRE8=Configuraciones.getString("ws.load.varLibre8");
+		public static final String WS_LOAD_VALOR_LIBRE9=Configuraciones.getString("ws.load.varLibre9");
+		public static final String WS_LOAD_VALOR_LIBRE10=Configuraciones.getString("ws.load.varLibre10");
+		public static final String WS_LOAD_FECHAEMIS=Configuraciones.getString("ws.load.encFchEmis");
+		public static final String WS_LOAD_TIPODESPACHO=Configuraciones.getString("ws.load.encTipoDespacho");
+		public static final String WS_LOAD_GIROEMISOR=Configuraciones.getString("ws.load.encGiroEmis");
+		public static final String WS_LOAD_TELEFONO=Configuraciones.getString("ws.load.encTelefono");
+		public static final String WS_LOAD_PATENTE=Configuraciones.getString("ws.load.encPatente");
+		public static final String WS_LOAD_MNT_EXE=Configuraciones.getString("ws.load.encMntExe");
+		public static final String WS_LOAD_RUT_CHOFER=Configuraciones.getString("ws.load.encRUTChofer");
+		public static final String WS_LOAD_NOMBRE_CHOFER=Configuraciones.getString("ws.load.encNombreChofer");
+		public static final String WS_LOAD_NOMBRE_TRANSP=Configuraciones.getString("ws.load.encNombreTransp");
+		public static final String WS_LOAD_ACTIVIDAD_ECON=Configuraciones.getString("ws.load.encActividadEcon");
+		public static final String WS_LOAD_NRO_LIN_DET=Configuraciones.getString("ws.load.detNroLinDet");
+		public static final String WS_LOAD_NMB_ITEM=Configuraciones.getString("ws.load.detNmbItem");
+		public static final String WS_LOAD_DSC_IEM=Configuraciones.getString("ws.load.detDscItem");
+		public static final String WS_LOAD_COD_ITEM=Configuraciones.getString("ws.load.codCodItem");
+		public static final String WS_LOAD_NROLINREFM=Configuraciones.getString("ws.load.refNroLinRef");
+		public static final String WS_LOAD_TIPODOCREF=Configuraciones.getString("ws.load.refTpoDocRef");
+		public static final String WS_LOAD_FOLIOREF=Configuraciones.getString("ws.load.refFolioRef");
+		public static final String WS_LOAD_FECHA_REF=Configuraciones.getString("ws.load.refFchRef");
+		public static final String WS_LOAD_RAZON_SOCIAL_REF=Configuraciones.getString("ws.load.refRazonRef");
+		
+		
+		
+		
+		//WS GET PDF SUCURSAL
+		public static final String ws_GET_PDF_SUCURSAL_PROTOCOL = Configuraciones.getString("ws.pdfSucursal.protocol");
+		public static final String ws_GET_PDF_SUCURSAL_WSDL = Configuraciones.getString("ws.pdfSucursal.wsdl");
+		public static final String ws_GET_PDF_SUCURSAL_HOST = Configuraciones.getString("ws.pdfSucursal.host");
+		public static final String ws_GET_PDF_SUCURSAL_SOAPACTION = Configuraciones.getString("ws.pdfSucursal.soapAction");
+		public static final String ws_GET_PDF_SUCURSAL_MERITO = Configuraciones.getString("ws.pdfSucursal.merito");
+		public static final String ws_GET_PDF_SUCURSAL_DOCUMENTO = Configuraciones.getString("ws.pdfSucursal.documento");
+		public static final String ws_GET_PDF_SUCURSAL_MONTO = Configuraciones.getString("ws.pdfSucursal.monto");
+		
+		
+		
+		//WS GET PDF CLOUD
+		public static final String ws_GET_PDF_CLOUD_PROTOCOL = Configuraciones.getString("ws.pdfCloud.protocol");
+		public static final String ws_GET_PDF_CLOUD_WSDL = Configuraciones.getString("ws.pdfCloud.wsdl");
+		public static final String ws_GET_PDF_CLOUD_HOST = Configuraciones.getString("ws.pdfCloud.host");
+		public static final String ws_GET_PDF_CLOUD_SOAPACTION = Configuraciones.getString("ws.pdfCloud.soapAction");
+		public static final String ws_GET_PDF_CLOUD_SECURITY_USERNAME = Configuraciones.getString("ws.pdfCloud.securityUserName");
+		public static final String ws_GET_PDF_CLOUD_SECURITY_PASSWORD = Configuraciones.getString("ws.pdfCloud.securityPassword");
+		public static final String ws_GET_PDF_CLOUD_SECURITY_NONCE = Configuraciones.getString("ws.pdfCloud.securityNonce");
+		public static final String ws_GET_PDF_CLOUD_CREATED = Configuraciones.getString("ws.pdfCloud.securityCreated");
+		public static final String ws_GET_PDF_CLOUD_DOCUMENTO = Configuraciones.getString("ws.pdfCloud.documento");
+		public static final String ws_GET_PDF_CLOUD_MONTO = Configuraciones.getString("ws.pdfCloud.monto");
+		
+		
+		//WS ANULAR GUIA
+		public static final String WS_ANULAR_GUIA_PROTOCOL = Configuraciones.getString("ws.protocol");
+		public static final String WS_ANULAR_GUIA_WSDL = Configuraciones.getString("ws.wsdl");
+		public static final String WS_ANULAR_GUIA_HOST = Configuraciones.getString("ws.host");
+		public static final String WS_ANULAR_GUIA_SOAPACTION = Configuraciones.getString("ws.soapAction");
+		public static final String WS_ANULAR_GUIA_SECURITY_USERNAME = Configuraciones.getString("ws.securityUserName");
+		public static final String WS_ANULAR_GUIA_SECURITY_PASSWORD = Configuraciones.getString("ws.securityPassword");
+		public static final String WS_ANULAR_GUIA_SECURITY_NONCE = Configuraciones.getString("ws.securityNonce");
+		public static final String WS_ANULAR_GUIA_SECURITY_CREATED = Configuraciones.getString("ws.securityCreated");
+		public static final String WS_ANULAR_GUIA_TIPO_DOCUMENTO = Configuraciones.getString("ws.tipoDocumento");
+		public static final String WS_ANULAR_GUIA_MOTIVO_ANULACION = Configuraciones.getString("ws.motivoAnulacion");
+		public static final String WS_ANULAR_GUIA_DESC_MOTIVO_ANULACION = Configuraciones.getString("ws.descMotivoAnulacion");
+		
+		
 }
+
+

@@ -13,7 +13,7 @@ public class DespachoDetalle {
 	private Long factura;
 	private Long notaCredito;
 	private Long bodega;
-	private Long dañado;
+	private Long daÃ±ado;
 	private Long aptoVenta;
 	private Long cerradas;
 	private Long vigentes;
@@ -118,8 +118,8 @@ public class DespachoDetalle {
 		this.fechaEstado = fechaEstado;
 	}
 
-	public Long getDañado() {
-		return dañado;
+	public Long getDaÃ±ado() {
+		return daÃ±ado;
 	}
 
 }

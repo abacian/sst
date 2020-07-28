@@ -44,7 +44,7 @@ $(document).ready(function() {
 		p.orderBy = $('#tiendas').getSortName()[0];
 		p.sortOrder = $('#tiendas').getSortOrder()[0];
 		var f = $('#tiendas').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=TiendasZonasReport" +
 			"&filter=" + JSON.stringify(p) + // + getParametros(form);
 			"&filterColumn=" + JSON.stringify(f);

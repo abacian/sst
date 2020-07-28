@@ -7,6 +7,7 @@ public class Ubicacion {
 	private String nombre;
 	private String direccion;
 	private String telefono;
+	private String rznsoc;
 	private String tipo;
 	private String centroCosto;
 	private Comuna comuna;
@@ -35,9 +36,19 @@ public class Ubicacion {
 			this.vigente = servicioTecnico.getVigente();
 			this.rut = servicioTecnico.getRut();
 			this.giro = servicioTecnico.getGiro();
+			this.rznsoc= servicioTecnico.getRznsoc();
 		}
 	}
 	
+	
+	public String getRznsoc()
+	{
+		return rznsoc;
+	}
+	public void setRznSoc(String rznsoc)
+	{
+		this.rznsoc=rznsoc;
+	}
 	public Long getId() {
 		return id;
 	}

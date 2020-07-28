@@ -96,7 +96,7 @@ $(document).ready(function() {
 		p.orderBy = $('#resultados').getSortName()[0];
 		p.sortOrder = $('#resultados').getSortOrder()[0];
 		var f = $('#resultados').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=OrdenTrabajoIndicadorFFReport" +
 			"&filter=" + JSON.stringify(p) +
 			"&filterColumn=" + JSON.stringify(f);
@@ -112,7 +112,7 @@ $(document).ready(function() {
 //			return;
 //		}
 //		var f = $('#resultados').getFilterColumna()[0];
-//		var url = "/sst/ViewReportServlet?type=xls&report=OrdenTrabajoReport&" +
+//		var url = "/sstnew/ViewReportServlet?type=xls&report=OrdenTrabajoReport&" +
 //			"filter=" + JSON.stringify(p) + 
 //			"&filterColumn=" + JSON.stringify(f);
 //		$.openWindowsMenubar(url, "EXCEL_OT", 600, 800);
@@ -125,7 +125,7 @@ $(document).ready(function() {
 //			return;
 //		}
 //		var f = $('#resultados').getFilterColumna()[0];
-//		var url = "/sst/ViewReportServlet?type=pdf&report=OrdenTrabajoReport&" +
+//		var url = "/sstnew/ViewReportServlet?type=pdf&report=OrdenTrabajoReport&" +
 //			"filter=" + JSON.stringify(p) + // + getParametros(form);
 //			"&filterColumn=" + JSON.stringify(f);
 //		$.openWindowsMenubar(url, "PDF_OT", 600, 800);

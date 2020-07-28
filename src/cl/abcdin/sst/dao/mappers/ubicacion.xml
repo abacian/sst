@@ -26,7 +26,6 @@
 	</resultMap>
 	
 	
-	
 	<insert id="save" parameterType="Ubicacion" keyColumn="id_ubicacion" keyProperty="id">
 		<selectKey resultType="Long" keyProperty="id" order="BEFORE">
 			select ssts_ubicaciones.nextval from dual
@@ -41,7 +40,8 @@
 			s_telefono, 
 			s_tipo, 
 			s_vigente,
-			s_codigo_ow
+			s_codigo_ow,
+			s_razon_social
 		) values (
 			#{id},
 			#{comuna.id},
@@ -52,7 +52,8 @@
 			#{telefono},
 			#{tipo},
 			#{vigente},
-			#{codigoOW}
+			#{codigoOW},
+			#{rznsoc}
 		)
 	</insert>
 	
@@ -65,6 +66,7 @@
 		    id_comuna =          #{comuna.id},
 		    s_giro =             #{giro},
 		    s_codigo_ow =        #{codigoOW},
+		    s_razon_social= 	 #{rznsoc},
 		    <if test="tipo != null and !tipo.equals('')">
 		    	s_tipo =             #{tipo},
 		    </if>
@@ -72,8 +74,9 @@
 		    i_rut =              #{rut, typeHandler=RunTypeHandler}
 	    where 
 	        id_ubicacion =       #{id}
-	</update>
-	
+</update>
+
+
 	<update id="updateVigencia" parameterType="Ubicacion">
 	    update sstt_ubicaciones set 
 	        s_vigente =         #{vigente}

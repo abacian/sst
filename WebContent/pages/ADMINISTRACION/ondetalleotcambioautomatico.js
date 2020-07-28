@@ -72,7 +72,7 @@ $(document).ready(function() {
 	
 	
 	$('#btnTicketDeCambio').click(function(){
-		var url = "/sst/ViewReportServlet?type=pdf" + 
+		var url = "/sstnew/ViewReportServlet?type=pdf" + 
 		"&report=TicketCambioReport" +
 		"&idOT=" + ordenTrabajo.id;
 		$.openWindowsMenubar(url, "TicketCambioReport", 600, 800);
@@ -80,7 +80,7 @@ $(document).ready(function() {
 	});
 	
 	$('#btnReporteCambio').click(function(){
-		var url = "/sst/ViewReportServlet?type=pdf" + 
+		var url = "/sstnew/ViewReportServlet?type=pdf" + 
 		"&report=InformeCambioProductoReport" +
 		"&idOT=" + ordenTrabajo.id;
 		$.openWindowsMenubar(url, "InformeCambioProductoReport", 600, 800);

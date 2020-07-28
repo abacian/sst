@@ -243,6 +243,7 @@
         <result property="banderaOrigenOT"                   column="flag_ot_fr" />
         <result property="identificadorTipoXN"               column="flag_tipo_xn" />
         <result property="centroCostoXN"               		 column="cc_xn_mcu" />
+         <result property="giroEmpresa"               		 column="s_giro_empresa" />
 	</resultMap>
 	
 	<select id="getOTById" parameterType="Long" resultMap="otSingle">
@@ -329,6 +330,7 @@
             ,u4.s_apellido_paterno as s_apellido_paterno_ccalidad
             ,ot.s_ccalidad_aprueba
             ,ot.s_ccalidad_observacion
+            ,ot.s_giro_empresa
             ,ot.s_clasificacion
             ,paclas.s_descripcion as s_descripcion_clasificacion
             ,(select max(r.d_fecha_recepcion) 
@@ -377,6 +379,7 @@
 			left join sstt_estados e2 on e2.id_estado = bi.id_estado
 		where
 		    ot.id_ot = #{idOt}
+		    and  ROWNUM=1
 	</select>
 	
 	<select id="getClasificacionOTById" parameterType="Long" resultMap="otSingle">

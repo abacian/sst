@@ -51,7 +51,7 @@ var initonmenurecibirotrecepcionff = function() {
 				        $.alerts.okButton = '&nbsp;Aceptar&nbsp;';
 						jAlert("El producto se devolverá a transporte. Luego de terminar la recepción ingrese al menu Guías Pendientes",'Aviso',function(){
 							$('#rechazarRecepcion, #aceptarConObservaciones, #aceptarRecepcion').attr('disabled',true);
-							var url = "/sst/ViewReportServlet?type=pdf" + 
+							var url = "/sstnew/ViewReportServlet?type=pdf" + 
 							"&report=InformeCambioProductoReport" +
 							"&idOT=" + ordenTrabajo.id;
 							$.openWindowsMenubar(url, "InformeCambioProductoReport", 600, 800);
@@ -106,7 +106,7 @@ var initonmenurecibirotrecepcionff = function() {
 				SSTFacade.saveBitacoraInterna(recepcion.guia.ordenTrabajo,{codigo:$('#clasificacion').val()},{async:false,callback:function(bitacoraInterna){}});
 				
 				jAlert("Recepción con Observación exitosa","Información",function(){
-					var url = "/sst/ViewReportServlet?type=pdf" + 
+					var url = "/sstnew/ViewReportServlet?type=pdf" + 
 					"&report=InformeCambioProductoReport" +
 					"&idOT=" + ordenTrabajo.id;
 					$.openWindowsMenubar(url, "InformeCambioProductoReport", 600, 800);
@@ -164,7 +164,7 @@ var initonmenurecibirotrecepcionff = function() {
 					$.alerts.okButton = '&nbsp;Aceptar&nbsp;';
 					jAlert("Recepcion exitosa","Información",function(){
 						$('#rechazarRecepcion, #aceptarConObservaciones, #aceptarRecepcion').attr('disabled',true);
-						var url = "/sst/ViewReportServlet?type=pdf" + 
+						var url = "/sstnew/ViewReportServlet?type=pdf" + 
 						"&report=InformeCambioProductoReport" +
 						"&idOT=" + ordenTrabajo.id;
 						$.openWindowsMenubar(url, "InformeCambioProductoReport", 600, 800);

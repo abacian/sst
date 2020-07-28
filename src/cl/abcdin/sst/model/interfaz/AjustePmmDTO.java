@@ -36,8 +36,6 @@ public class AjustePmmDTO implements Serializable {
 	private String toInnerPackId;
 	private String toMrptCode;
 	private String toDrptCode;
-	private int boletaNumber; //JADM MOD 1 AGREGA ATRIBUTO REF1
-	private Long otNumber; //JADM MOD 2 AGREGA ATRIBUTO REF2
 	private long batchNum;
 	/**
 	 * @return the techKey
@@ -291,30 +289,7 @@ public class AjustePmmDTO implements Serializable {
 	public void setBatchNum(final long batchNum) {
 		this.batchNum = batchNum;
 	}
-	/**
-	 * @return the boletaNumber
-	 */
-	public int getBoletaNumber() {  //JADM MOD 3 GREGA METODOS G/S INICIO
-		return boletaNumber;
-	}
-	/**
-	 * @param boletaNumber the boletaNumber to set
-	 */
-	public void setBoletaNumber(int boletaNumber) {
-		this.boletaNumber = boletaNumber;
-	}
-	/**
-	 * @return the otNumber
-	 */
-	public Long getOtNumber() {
-		return otNumber;
-	}
-	/**
-	 * @param otNumber the otNumber to set
-	 */
-	public void setOtNumber(Long otNumber) { //JADM MOD 3 AGREGA METODOS G/S FIN
-		this.otNumber = otNumber;
-	}
+
 	@Override
 	public String toString() {
 		return "AjustePmmDTO [techKey=" + techKey + ", orgLvlNumber="
@@ -329,8 +304,7 @@ public class AjustePmmDTO implements Serializable {
 				+ prdSllUom + ", fromInnerPackId=" + fromInnerPackId
 				+ ", toInnerPackId=" + toInnerPackId + ", toMrptCode="
 				+ toMrptCode + ", toDrptCode=" + toDrptCode + ", batchNum="
-				+ batchNum + 
-				", boletaNumber=" + boletaNumber + ", otnumber=" + otNumber + "]"; //JADM MOD 4 AGREGA ELEMENTOS
+				+ batchNum + "]";
 	}
 	
 	public String getLineaAjuste() {
@@ -355,9 +329,7 @@ public class AjustePmmDTO implements Serializable {
 				.append(Constants.PIPE).append(toInnerPackId)
 				.append(Constants.PIPE).append(toMrptCode)
 				.append(Constants.PIPE).append(toDrptCode)
-				.append(Constants.PIPE).append(batchNum)
-				.append(Constants.PIPE).append(boletaNumber) //JADM MOD 5 AGREGA ATRIBUTOS
-				.append(Constants.PIPE).append(otNumber);    //JADM MOD 6 AGREGA ARTIBUTOS
+				.append(Constants.PIPE).append(batchNum);
 		return str.toString();
 	}
 }

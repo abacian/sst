@@ -935,7 +935,7 @@ public class EnvioRecepcionService {
 			Bitacora bitacora = null;
 			if(recepcionDAO.getExisteRecepcionOT(recepcion) >= 1) {
 				throw new SSTException("Ya existe una recepción de OT con el número de guía - " + recepcion.getGuia().getNumero());
-			}
+				}
 			Guia guiaRecibida = guiaDAO.get(recepcion.getGuia().getId());
 			Ubicacion ubicacionOT = ubicacionDAO.getUbicacionOT(recepcion.getGuia().getOrdenTrabajo().getId());
 			OrdenTrabajo ordenTrabajo = ordenTrabajoDAO.getOTById(recepcion.getGuia().getOrdenTrabajo().getId());
@@ -1723,7 +1723,7 @@ public class EnvioRecepcionService {
 				guia.setObservacion(Constants.GUIA_ENVIADA_SIN_EMISION_GUIA);
 				guia.setTipoGuia(Constants.GUIA_TIPO_UNITARIA);
 				guia.setFechaEmision(fechaEmision);
-				sucursalService.emitirGuia(oT.getId(), guia, servicioTecnico, usuario, ubicacion);
+				sucursalService.emitirGuiaDB(oT.getId(), guia, servicioTecnico, usuario, ubicacion, null);
 			}
 		} catch (Exception e) {
 			log.error(e,e);

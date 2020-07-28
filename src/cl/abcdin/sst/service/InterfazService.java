@@ -47,7 +47,6 @@ public class InterfazService {
 		String nombreArchivo = null;
 		AjustePmmDTO registro = null;
 		String nombre = null;
-		
 		try {
 			// ADJ+ST+PMM+ORG_LVL_NUMBER+yyyymmddhhss+batch_number.TXT
 			if(ubicacion == null){
@@ -66,7 +65,7 @@ public class InterfazService {
 			salida = new PrintWriter(nombre);
 			
 			//------------------------------------------------------------------------
-			 // salida = new PrintWriter("C:/borrarDataTestABCDIN/".concat(nombre));
+			//salida = new PrintWriter("C:/borrarDataTestABCDIN/".concat(nombre));
 			//------------------------------------------------------------------------
 			
 			registro = getAdjRegistro(oT, ubicacion, dcQuantity);
@@ -115,7 +114,6 @@ public class InterfazService {
 	}
 	
 	private AjustePmmDTO getAdjRegistro(OrdenTrabajo oT, Ubicacion ubicacion, String dcQuantity) {
-		
 		AjustePmmDTO ajustePmmDTO = new AjustePmmDTO();
 		Long seqPMM = new Long(1); //utilDAO.getSeqRegInterfazPMM();
 		
@@ -137,7 +135,6 @@ public class InterfazService {
 		//-----------------------------------------------------------------------
 		String quanty = "";
 		if(oT.getBanderaOrigenOT().equals(Constants.CASO_USO_1)){
-		
 			String[] contiene = SSTTParametros.getInstancia().getParametroPorCodigo(Constants.INV_MRPT_DRPT_CODE_CU_01).getValor().split("/");
 			ajustePmmDTO.setInvMrptCode(contiene[0]);
 			ajustePmmDTO.setInvDrptCode(contiene[1]);
@@ -149,7 +146,6 @@ public class InterfazService {
 			}
 			
 		}else if(oT.getBanderaOrigenOT().equals(Constants.CASO_USO_2)){
-		
 			String[] contiene = SSTTParametros.getInstancia().getParametroPorCodigo(Constants.INV_MRPT_DRPT_CODE_CU_02).getValor().split("/");
 			ajustePmmDTO.setInvMrptCode(contiene[0]);
 			ajustePmmDTO.setInvDrptCode(contiene[1]);
@@ -161,7 +157,6 @@ public class InterfazService {
 			}
 			
 		}else if(oT.getBanderaOrigenOT().equals(Constants.CASO_USO_4)){
-					
 			if(dcQuantity.equals(Constants.DC_QUANTITY_NEGATIVO)){
 				String[] contiene = SSTTParametros.getInstancia().getParametroPorCodigo(Constants.INV_MRPT_DRPT_CODE_CU_04_2).getValor().split("/");
 				ajustePmmDTO.setInvMrptCode(contiene[0]);
@@ -173,7 +168,7 @@ public class InterfazService {
 					quanty = Constants.DC_QUANTITY_NEGATIVO;
 				}
 			}
-			if(dcQuantity.equals(Constants.DC_QUANTITY_POSITIVO)){		
+			if(dcQuantity.equals(Constants.DC_QUANTITY_POSITIVO)){
 				String[] contiene = SSTTParametros.getInstancia().getParametroPorCodigo(Constants.INV_MRPT_DRPT_CODE_CU_04_3).getValor().split("/");
 				ajustePmmDTO.setInvMrptCode(contiene[0]);
 				ajustePmmDTO.setInvDrptCode(contiene[1]);
@@ -185,7 +180,7 @@ public class InterfazService {
 				}
 			}
 						
-		}else if(oT.getBanderaOrigenOT().equals(Constants.CASO_USO_5)){		
+		}else if(oT.getBanderaOrigenOT().equals(Constants.CASO_USO_5)){
 			String[] contiene = SSTTParametros.getInstancia().getParametroPorCodigo(Constants.INV_MRPT_DRPT_CODE_CU_05).getValor().split("/");
 			ajustePmmDTO.setInvMrptCode(contiene[0]);
 			ajustePmmDTO.setInvDrptCode(contiene[1]);
@@ -257,6 +252,7 @@ public class InterfazService {
 		}else{
 			ajustePmmDTO.setDcQuantity(dcQuantity);
 		}
+		
 		ajustePmmDTO.setJdaQuantity(Constants.VACIO);
 		ajustePmmDTO.setActionFlag(Constants.ACTION_FLAG_ADJ);
 		ajustePmmDTO.setDownloadDate1(Constants.VACIO);
@@ -267,8 +263,6 @@ public class InterfazService {
 		ajustePmmDTO.setToMrptCode(Constants.VACIO);
 		ajustePmmDTO.setToDrptCode(Constants.VACIO);
 		ajustePmmDTO.setBatchNum(seqPMM);
-		ajustePmmDTO.setBoletaNumber(oT.getIdDocumento()); //JADM MOD 7 AGREGA IdBoleta
-		ajustePmmDTO.setOtNumber(oT.getId()); //JADM MOD 8 AGREGA idOT
 		return ajustePmmDTO;
 	}
 	

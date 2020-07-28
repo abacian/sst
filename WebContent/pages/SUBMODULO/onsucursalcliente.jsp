@@ -11,12 +11,18 @@
 				<tr>
 					<td width="50%">
 						<fieldset>
+						
 							<label for="rut">Rut cliente</label>
 							<input id="rut" name="rut" type="text"  style="width:130px" class="required run"/>
 							<input type="button" value="Buscar" name="rut" id="buscarCliente" />
 						
 							<label for="nombreCompleto">Nombre Y Apellido</label>
 							<input type="text" id="nombreCompleto" name="nombreCompleto" class="required" maxlength="64"/>
+							
+							<div id="giroFactura">
+							<label for="giro">Giro</label>
+							<input type="text" id="giro" name="giro" class="required"/>
+							</div>
 						
 							<label for="celular">Celular</label>
 							<input id="celular" type="text" name="celular" class="celular"/>
@@ -29,6 +35,7 @@
 							
 							<label for="ticket" class="ticket" id="ticketLabel">Ticket de cambio o Nota de crédito</label>
 							<label id="ticket" class="ticket">&nbsp;</label>
+							
 						</fieldset>
 					</td>
 					<td>

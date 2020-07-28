@@ -123,6 +123,17 @@ public class OrdenTrabajo{
 	private Boolean nuevaOt;
 	private String identificadorTipoXN;
 	private String centroCostoXN;
+	private String giroEmpresa;
+	
+	public String getGiroEmpresa()
+	{
+		return giroEmpresa;
+	}
+	
+	public void setGiroEmpresa(String giroEmpresa)
+	{
+		this.giroEmpresa=giroEmpresa;
+	}
 
 	public String getIdentificadorTipoXN() {
 		return identificadorTipoXN;

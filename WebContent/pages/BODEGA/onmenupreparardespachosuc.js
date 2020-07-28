@@ -48,7 +48,7 @@ $(document).ready(function(){
 		p.orderBy = $('#envios').getSortName()[0];
 		p.sortOrder = $('#envios').getSortOrder()[0];
 		var f = $('#envios').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=DespachosSucReport" +
 			"&filter=" + JSON.stringify(p) +
 			"&filterColumn=" + JSON.stringify(f);
@@ -98,7 +98,7 @@ $(document).ready(function(){
 		p.orderBy = $('#oTsListas').getSortName()[0];
 		p.sortOrder = $('#oTsListas').getSortOrder()[0];
 		var f = $('#oTsListas').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=OTDespachosSucReport" +
 			"&filter=" + JSON.stringify(p) +
 			"&filterColumn=" + JSON.stringify(f);

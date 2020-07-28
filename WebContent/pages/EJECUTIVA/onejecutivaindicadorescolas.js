@@ -79,7 +79,7 @@ $(document).ready(function() {
 });
 
 var exportDocument = function(type, filterColumn, filter){
-	var url = "/sst/ViewReportServlet?type=" + type + 
+	var url = "/sstnew/ViewReportServlet?type=" + type + 
 		"&report=OrdenTrabajoIndicadorEjecutivaReport" +
 		"&filter=" + JSON.stringify(filter) + 
 		"&filterColumn=" + JSON.stringify(filterColumn);

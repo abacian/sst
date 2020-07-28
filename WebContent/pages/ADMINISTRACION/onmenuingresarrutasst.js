@@ -65,7 +65,7 @@ $(document).ready(function(){
 		p.orderBy = $('#rutas').getSortName()[0];
 		p.sortOrder = $('#rutas').getSortOrder()[0];
 		var f = $('#rutas').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=RutaServicioTecnicoReport" +
 			"&filter=" + JSON.stringify(p) + 
 			"&filterColumn=" + JSON.stringify(f);

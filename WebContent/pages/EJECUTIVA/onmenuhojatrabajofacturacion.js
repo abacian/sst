@@ -63,7 +63,7 @@ $(document).ready(function() {
 	
 	var exportDocument = function(type){
 		var f = $('#facturas').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=FacturacionReport" +
 			"&filterColumn=" + JSON.stringify(f);
 		$.openWindowsMenubar(url, "PDF_OT", 600, 800);
@@ -78,7 +78,7 @@ $(document).ready(function() {
 		p.orderBy = $('#resultados').getSortName()[0];
 		p.sortOrder = $('#resultados').getSortOrder()[0];
 		var f = $('#resultados').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=OrdenTrabajoFacturacionReport" +
 			"&filter=" + JSON.stringify(p) + // + getParametros(form);
 			"&filterColumn=" + JSON.stringify(f);

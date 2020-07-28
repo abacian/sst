@@ -18,7 +18,7 @@
 						</fieldset>
 						<fieldset>
 							<label style="width:220px;" for="fechaCambio">FECHA CAMBIO</label>
-							<label id="fechaCambio" format="dd/MM/yyyy" style="width:400px;"></label
+							<label id="fechaCambio" format="dd/MM/yyyy" style="width:400px;"></label>
 						</fieldset>
 						<fieldset>							
 							<label style="width:220px;" for="codigoBarra">Codigo Barras</label>

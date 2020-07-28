@@ -212,7 +212,7 @@ $(document).ready(function() {
 		var f = $('#reglasComerciales').getFilterColumna()[0];
 		p.orderBy = $('#reglasComerciales').getSortName()[0];
 		p.sortOrder = $('#reglasComerciales').getSortOrder()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=ReglasComercialesReport" +
 			"&filter=" + JSON.stringify(p) + // + getParametros(form);
 			"&filterColumn=" + JSON.stringify(f);

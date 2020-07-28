@@ -10,7 +10,7 @@ $(document).ready(function(){
 		p.orderBy = $('#ordenesAutorizadasSinGuia').getSortName()[0];
 		p.sortOrder = $('#ordenesAutorizadasSinGuia').getSortOrder()[0];
 		var f = $('#ordenesAutorizadasSinGuia').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=OrdenesAutorizadasSinGuiaReport" +
 			"&filterColumn=" + JSON.stringify(f) + 
 			"&gridControl=" + JSON.stringify(p);
@@ -22,7 +22,7 @@ $(document).ready(function(){
 		p.orderBy = $('#guiasDespacho').getSortName()[0];
 		p.sortOrder = $('#guiasDespacho').getSortOrder()[0];
 		var f = $('#guiasDespacho').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=GuiaRemateReport" +
 			"&filterColumn=" + JSON.stringify(f) + 
 			"&gridControl=" + JSON.stringify(p);
@@ -251,7 +251,7 @@ $(document).ready(function(){
 	});
 	
 	$('#popup').find('#imprimir').click(function(){
-		var url = "/sst/ViewReportServlet?type=pdf" + 
+		var url = "/sstnew/ViewReportServlet?type=pdf" + 
 		"&report=GuiaAgrupadaReport" +
 		"&idGuia=" + $('#popup').find('#id').val();
 		$.openWindowsMenubar(url, "GuiaDetalleReport", 600, 800);

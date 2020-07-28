@@ -6,6 +6,7 @@ public class ServicioTecnico extends TipoGenerico {
 	private String direccion;
 	private String rut;
 	private String telefono;
+	private String rznsoc;
 	private Comuna comuna;
 	private Region region;
 	private OrdenTrabajo ot;// tiene producto y producto tiene marca
@@ -20,7 +21,8 @@ public class ServicioTecnico extends TipoGenerico {
 	
 	public ServicioTecnico() {}
 	
-	public ServicioTecnico(Ubicacion ubicacion) throws Exception {
+	public ServicioTecnico(Ubicacion ubicacion) throws Exception 
+	{
 		this.nombre = ubicacion.getNombre();
 		this.setId(ubicacion.getId().intValue());
 		this.direccion = ubicacion.getDireccion();
@@ -30,15 +32,28 @@ public class ServicioTecnico extends TipoGenerico {
 		this.vigente = ubicacion.getVigente();
 		this.rut = ubicacion.getRut();
 		this.giro = ubicacion.getGiro();
+		this.rznsoc=ubicacion.getRznsoc();
 	}
 	
-	public String getDireccion() {
+	public String getRznsoc()
+	{
+		return rznsoc;
+	}
+	
+	public void setRznsoc(String rznsoc)
+	{
+		this.rznsoc=rznsoc;
+	}
+	public String getDireccion() 
+	{
 		return direccion;
 	}
-	public void setDireccion(String direccion) {
+	public void setDireccion(String direccion) 
+	{
 		this.direccion = direccion;
 	}
-	public String getRut() {
+	public String getRut() 
+	{
 		return rut;
 	}
 	public void setRut(String rut) {

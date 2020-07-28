@@ -69,12 +69,13 @@
 										<fieldset>
 				   							<label for="nombre">NOMBRE</label>
 				   							<input type="text" name="nombre" id="nombre" maxlength="50" class="required" >
+				   							<label for="rznsoc">RAZON SOCIAL</label>
+				   							<input type="text" name="rznsoc" id="rznsoc" maxlength="50" class="required" >
 				   							<label for="direccion">DIRECCION</label>
 				   							<input type="text" name="direccion" id="direccion" maxlength="50" class="required">
 				   							<label for="giro">GIRO</label>
 				   							<input type="text" name="giro" id="giro" maxlength="32" class="required">
-				   							<label for="region.id">REGION</label>
-				   						    <select id="region.id" name="region.id" class="required" ></select>
+				   							
 				   						
 				   						</fieldset>
 									</td>
@@ -85,8 +86,11 @@
 				   							<input type="text" name="rut" id="rut" class="run required" >
 				   							<label for="telefono">TELEFONO</label>
 				   							<input type="text" name="telefono" id="telefono" maxlength="20">
+				   							<label for="region.id">REGION</label>
+				   						    <select id="region.id" name="region.id" class="required" ></select>
 				   							<label for="comuna.id">COMUNA</label>
 				   							<select id="comuna.id" name="comuna.id" class="required"></select>
+				   							
 				   						</fieldset>
 									</td>
 								</tr>

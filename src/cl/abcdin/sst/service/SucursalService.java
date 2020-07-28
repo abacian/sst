@@ -4,9 +4,11 @@ import java.text.DateFormat;
 import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -24,6 +26,7 @@ import cl.abcdin.sst.dao.FamiliaDAO;
 import cl.abcdin.sst.dao.GestionesDAO;
 import cl.abcdin.sst.dao.GuiaAgrupadaDAO;
 import cl.abcdin.sst.dao.GuiaDAO;
+
 import cl.abcdin.sst.dao.LineaDAO;
 import cl.abcdin.sst.dao.LogisticoDAO;
 import cl.abcdin.sst.dao.NotaCreditoDAO;
@@ -54,6 +57,8 @@ import cl.abcdin.sst.model.Familia;
 import cl.abcdin.sst.model.Gestion;
 import cl.abcdin.sst.model.Guia;
 import cl.abcdin.sst.model.GuiaAccesorios;
+import cl.abcdin.sst.model.GuiaGetPDFWS;
+import cl.abcdin.sst.model.GuiaWebService;
 import cl.abcdin.sst.model.Indicador;
 import cl.abcdin.sst.model.Linea;
 import cl.abcdin.sst.model.ListRange;
@@ -96,6 +101,10 @@ import cl.abcdin.sst.model.filters.GridControl;
 import cl.abcdin.sst.model.vo.CrearOTGP;
 import cl.abcdin.sst.model.vo.FamiliaExcluida;
 import cl.abcdin.sst.model.vo.GuiaPendienteAgrupada;
+import cl.abcdin.sst.utils.AuxAnularGuia;
+import cl.abcdin.sst.utils.AuxConverter;
+import cl.abcdin.sst.utils.AuxGetPDF;
+import cl.abcdin.sst.utils.AuxLoad;
 import cl.abcdin.sst.utils.Constants;
 import cl.abcdin.sst.utils.OWConstants;
 
@@ -103,6 +112,7 @@ public class SucursalService {
 
 	private DocumentoDAO documentoDAO;
 	private ProductoDAO productoDAO;
+
 	private GuiaDAO guiaDAO;
 	private ServicioTecnicoDAO servicioTecnicoDAO;
 	private OrdenTrabajoDAO ordenTrabajoDAO;
@@ -140,8 +150,7 @@ public class SucursalService {
 	private InterfazService interfazService;
 	private static final Log log = LogFactory.getLog(SucursalService.class);
 
-	public Documento getDocumentoByIdAndTipo(Documento documento)
-			throws Exception {
+	public Documento getDocumentoByIdAndTipo(Documento documento) throws Exception {
 		try {
 			return documentoDAO.getDocumentoByIdAndTipo(documento);
 		} catch (Exception e) {
@@ -150,57 +159,64 @@ public class SucursalService {
 		}
 	}
 
-	public Documento getDocumentoCompletoByIdAndTipo(Documento doc,
-			Ubicacion ubicacion) throws Exception {
-		
+	public Documento getDocumentoCompletoByIdAndTipo(Documento doc, Ubicacion ubicacion) throws Exception {
+
 		Date fechaEmison = null;
 		try {
 			Documento documento = documentoDAO.getDocumentoByIdAndTipo(doc);
-			
-			if (documento == null){
+
+			if (documento == null) {
 				throw new SSTException("No se ha encontrado la " + doc.getTipo() + " numero " + doc.getId());
-			}else{
+			} else {
 				documento.setProductos(productoDAO.listProductoByTipoDocumentoAndIdDocumento(documento));
-				fechaEmison = documento.getFechaEmision();	
+				fechaEmison = documento.getFechaEmision();
 			}
-				
-			if (documento.getProductos() == null || documento.getProductos().size() == 0)
-				throw new SSTException("La " + doc.getTipo() + " número " + doc.getId() + " no tiene productos asociados");
+
+			if (documento.getProductos() == null || documento.getProductos().size() == 0) {
+				throw new SSTException(
+						"La " + doc.getTipo() + " nï¿½mero " + doc.getId() + " no tiene productos asociados");
+			}
 
 			for (Producto producto : documento.getProductos()) {
 				if (productoDAO.getProductoById(producto.getId()) != null) {
 					producto.setEnGarantiaProveedor(isGarantiaProveedor(producto, documento));
 					producto.setFechaEntrega(fechaEmison);
 					if (isCambioPor24h(producto, ubicacion)) {
-						producto.setMotivoCambioMenor24h("Producto con autorización de cambio menor 24 horas");
+						producto.setMotivoCambioMenor24h("Producto con autorizaciï¿½n de cambio menor 24 horas");
 						producto.setCambioPor24h(true);
 
 					}
 					if (isCambioPorAutorizacionProveedor(producto, ubicacion)) {
 						producto.setCambioAutorizadoProveedor(true);
-						producto.setMotivoCambioAutorizadoProveedor(this.getReglaComercialVigentePorAutorizacionProveedor(producto, ubicacion).getReglaCambioProoveedor().getNotaProoveedor());
+						producto.setMotivoCambioAutorizadoProveedor(
+								this.getReglaComercialVigentePorAutorizacionProveedor(producto, ubicacion)
+										.getReglaCambioProoveedor().getNotaProoveedor());
 					}
-					
+
 					try {
 						producto.setCambioPorValor(isCambioPorValor(producto, ubicacion));
 						if (producto.getCambioPorValor()) {
-							producto.setMotivoCambioPorValor("Producto con valor menor a $"+ this.getReglaComercialVigentePorValor(producto, ubicacion).getCambioAutomatico().getPrecioLimite());
+							producto.setMotivoCambioPorValor("Producto con valor menor a $"
+									+ this.getReglaComercialVigentePorValor(producto, ubicacion).getCambioAutomatico()
+											.getPrecioLimite());
 						}
-						
+
 					} catch (SSTException e) {
 						producto.setCambioPorValor(false);
 						producto.setMotivoCambioPorValor(e.getMessage());
 					}
-					
+
 					try {
-						producto.setCambioPorFallaFabricacion(isCambioPorFallaFabricacion(producto, documento, ubicacion));
+						producto.setCambioPorFallaFabricacion(
+								isCambioPorFallaFabricacion(producto, documento, ubicacion));
 						if (producto.getCambioPorFallaFabricacion()) {
 							if (validarCambioEnMeson(documento, producto, ubicacion)) {
 								producto.setMotivoCambioPorFallaFabricacion("Producto califica como cambio En meson");
 								producto.setCambioMeson(true);
-								
+
 							} else {
-								producto.setMotivoCambioPorFallaFabricacion("Producto califica como cambio por falla de fabricacion");
+								producto.setMotivoCambioPorFallaFabricacion(
+										"Producto califica como cambio por falla de fabricacion");
 								producto.setCambioMeson(false);
 								Date fecha = new Date();
 								SimpleDateFormat formateador = new SimpleDateFormat("ddMMyyyy");
@@ -209,22 +225,21 @@ public class SucursalService {
 
 								if (fechaSistema.equals(fechaEmision)) {
 									producto.setProductoParaEvaluacion(false);
-									
+
 								} else {
-									producto.setProductoParaEvaluacion(!isCambioAutomaticoPorFallaFabricacion(producto, ubicacion));
+									producto.setProductoParaEvaluacion(
+											!isCambioAutomaticoPorFallaFabricacion(producto, ubicacion));
 									if (producto.getProductoParaEvaluacion()) {
-										producto.setMotivoProductoParaEvaluacion("Producto para evaluación");
+										producto.setMotivoProductoParaEvaluacion("Producto para evaluaciï¿½n");
 									}
 								}
 							}
 						}
 					} catch (SSTException e) {
 						producto.setCambioPorFallaFabricacion(false);
-						producto.setMotivoCambioPorFallaFabricacion(e
-								.getMessage());
+						producto.setMotivoCambioPorFallaFabricacion(e.getMessage());
 					}
-					producto.setCambioCertificacionFalla(isCambioPorCertificacionFalla(
-							producto, documento, ubicacion));
+					producto.setCambioCertificacionFalla(isCambioPorCertificacionFalla(producto, documento, ubicacion));
 				}
 			}
 
@@ -237,8 +252,7 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean validarCambioEnMeson(Documento documento, Producto producto,
-			Ubicacion ubicacion) throws Exception {
+	public Boolean validarCambioEnMeson(Documento documento, Producto producto, Ubicacion ubicacion) throws Exception {
 		try {
 			// ReglaComercial reglaComercial =
 			// getReglaComercialCompleta(producto, ubicacion);
@@ -248,8 +262,7 @@ public class SucursalService {
 			// Date fechaEmision = formateador.parse(fecha);
 
 			long MILISEGUNDOS_EN_UN_DIA = 1000 * 60 * 60 * 24;
-			long dias = (fechaActual.getTime() - documento.getFechaEmision()
-					.getTime()) / MILISEGUNDOS_EN_UN_DIA;
+			long dias = (fechaActual.getTime() - documento.getFechaEmision().getTime()) / MILISEGUNDOS_EN_UN_DIA;
 			if (dias == 0) {
 				return true;
 			} else {
@@ -261,11 +274,9 @@ public class SucursalService {
 		}
 	}
 
-	public List<Producto> listProductoByTipoDocumentoAndIdDocumento(
-			Documento documento) throws Exception {
+	public List<Producto> listProductoByTipoDocumentoAndIdDocumento(Documento documento) throws Exception {
 		try {
-			return productoDAO
-					.listProductoByTipoDocumentoAndIdDocumento(documento);
+			return productoDAO.listProductoByTipoDocumentoAndIdDocumento(documento);
 		} catch (Exception e) {
 			log.error(e, e);
 			throw e;
@@ -281,19 +292,14 @@ public class SucursalService {
 		}
 	}
 
-	public List<ServicioTecnico> listSTecnicoYBodegasByFilter(
-			FilterServicioTecnico filter, Ubicacion ubicacion) throws Exception {
+	public List<ServicioTecnico> listSTecnicoYBodegasByFilter(FilterServicioTecnico filter, Ubicacion ubicacion)
+			throws Exception {
 		try {
 			filter.setIdOrigen(ubicacion.getId());
-			List<ServicioTecnico> sTecnicos = this.listSTecnicoByFilter(filter,
-					ubicacion);
+			List<ServicioTecnico> sTecnicos = this.listSTecnicoByFilter(filter, ubicacion);
 			sTecnicos.addAll(servicioTecnicoDAO.listBodegasByFilter(filter));
 			for (int i = 0; i < sTecnicos.size(); i++) {
-				if (sTecnicos
-						.get(i)
-						.getId()
-						.equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF
-								.intValue())) {
+				if (sTecnicos.get(i).getId().equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF.intValue())) {
 					sTecnicos.remove(i);
 					break;
 				}
@@ -305,8 +311,8 @@ public class SucursalService {
 		}
 	}
 
-	public List<ServicioTecnico> listSTecnicoByFilter(
-			FilterServicioTecnico filter, Ubicacion ubicacion) throws Exception {
+	public List<ServicioTecnico> listSTecnicoByFilter(FilterServicioTecnico filter, Ubicacion ubicacion)
+			throws Exception {
 		try {
 			if (filter.getIdOT() != null) {
 				OrdenTrabajo ot = ordenTrabajoDAO.getOTById(filter.getIdOT());
@@ -324,8 +330,7 @@ public class SucursalService {
 		}
 	}
 
-	public List<OrdenTrabajo> listHistorialOT(FilterHisotrial filter)
-			throws Exception {
+	public List<OrdenTrabajo> listHistorialOT(FilterHisotrial filter) throws Exception {
 		try {
 			return ordenTrabajoDAO.listHistorialOT(filter);
 		} catch (Exception e) {
@@ -334,24 +339,23 @@ public class SucursalService {
 		}
 	}
 
-	public ListRange listGuiasPendientesSucursal(
-			FilterGuiasPendientes filterGuiasPendientes, Ubicacion ubicacion,
+	public ListRange listGuiasPendientesSucursal(FilterGuiasPendientes filterGuiasPendientes, Ubicacion ubicacion,
 			GridControl gridControl) throws Exception {
 		try {
 			ListRange listRange = new ListRange();
 			filterGuiasPendientes.setIdUbicacion(ubicacion.getId());
 			filterGuiasPendientes.setOrderBy(gridControl.getOrderBy());
 			filterGuiasPendientes.setSortOrder(gridControl.getSortOrder());
-			listRange.setRows(guiaDAO.listGuiasPendientesBySucursal(
-					filterGuiasPendientes, gridControl));
-			listRange.setTotal(guiaDAO
-					.getTotalGuiasPendientesBySucursal(filterGuiasPendientes));
+			listRange.setRows(guiaDAO.listGuiasPendientesBySucursal(filterGuiasPendientes, gridControl));
+			listRange.setTotal(guiaDAO.getTotalGuiasPendientesBySucursal(filterGuiasPendientes));
 			return listRange;
 		} catch (Exception e) {
 			log.error(e, e);
 			throw e;
 		}
 	}
+	
+
 
 	public Bitacora getBitacoraByIdGuia(Long idGuia) throws Exception {
 		try {
@@ -362,8 +366,7 @@ public class SucursalService {
 		}
 	}
 
-	public Guia getGuiaById(Long id, Ubicacion ubicacion, Usuario usuario)
-			throws Exception {
+	public Guia getGuiaById(Long id, Ubicacion ubicacion, Usuario usuario) throws Exception {
 		try {
 			Guia guia = guiaDAO.get(id);
 			if (guia.getNumero() == null || guia.getNumero() == 0) {
@@ -379,9 +382,8 @@ public class SucursalService {
 		}
 	}
 
-	public CrearOTGP getCrearOTGP(FilterServicioTecnico filterST,
-			FilterHisotrial filterH, Documento documento, Ubicacion ubicacion,
-			Date dateActual) throws Exception {
+	public CrearOTGP getCrearOTGP(FilterServicioTecnico filterST, FilterHisotrial filterH, Documento documento,
+			Ubicacion ubicacion, Date dateActual) throws Exception {
 		try {
 			CrearOTGP crearOTGP = new CrearOTGP();
 
@@ -389,16 +391,12 @@ public class SucursalService {
 			if (producto != null) {
 				crearOTGP.setBigTicket(producto.getBigTicket());
 			}
-			crearOTGP
-					.setConsultarHistorial(!listHistorialOT(filterH).isEmpty());
-			crearOTGP.setConsultarST(!listSTecnicoByFilter(filterST, ubicacion)
-					.isEmpty());
+			crearOTGP.setConsultarHistorial(!listHistorialOT(filterH).isEmpty());
+			crearOTGP.setConsultarST(!listSTecnicoByFilter(filterST, ubicacion).isEmpty());
 
 			crearOTGP.setConsultarGP(isGarantiaProveedor(producto, documento));
-			crearOTGP.setFechaVencimiento(getFechaVencimientoGarantiaProducto(
-					producto, documento));
-			crearOTGP.setProcedimiento(administracionService
-					.getProcedimientoByIdProducto(producto.getId()));
+			crearOTGP.setFechaVencimiento(getFechaVencimientoGarantiaProducto(producto, documento));
+			crearOTGP.setProcedimiento(administracionService.getProcedimientoByIdProducto(producto.getId()));
 
 			return crearOTGP;
 
@@ -408,8 +406,8 @@ public class SucursalService {
 		}
 	}
 
-	private Date getFechaVencimientoGarantiaProducto(Integer idProducto,
-			Integer idDocumento, String tipoDocumento) throws Exception {
+	private Date getFechaVencimientoGarantiaProducto(Integer idProducto, Integer idDocumento, String tipoDocumento)
+			throws Exception {
 		try {
 			Documento documento = new Documento();
 			Producto producto = new Producto();
@@ -424,8 +422,7 @@ public class SucursalService {
 		}
 	}
 
-	private Date getFechaVencimientoGarantiaProducto(Producto producto,
-			Documento documento) throws Exception {
+	private Date getFechaVencimientoGarantiaProducto(Producto producto, Documento documento) throws Exception {
 		try {
 			producto = getProductoById(producto.getId());
 			documento = getDocumentoByIdAndTipo(documento);
@@ -433,8 +430,7 @@ public class SucursalService {
 			Calendar fechaVencimiento = Calendar.getInstance();
 			fechaVencimiento.setTime(documento.getFechaEmision());
 			if (producto.getDuracionGarantia() != null) {
-				fechaVencimiento.add(Calendar.MONTH,
-						producto.getDuracionGarantia());
+				fechaVencimiento.add(Calendar.MONTH, producto.getDuracionGarantia());
 			}
 			return fechaVencimiento.getTime();
 		} catch (Exception e) {
@@ -442,8 +438,7 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean isGarantiaProveedor(Producto producto, Documento documento)
-			throws Exception {
+	public Boolean isGarantiaProveedor(Producto producto, Documento documento) throws Exception {
 		try {
 			producto = getProductoById(producto.getId());
 			documento = getDocumentoByIdAndTipo(documento);
@@ -455,19 +450,16 @@ public class SucursalService {
 			if (producto.getDuracionGarantia() == null) {
 				return false;
 			}
-			fechaVencimiento
-					.add(Calendar.MONTH, producto.getDuracionGarantia());
+			fechaVencimiento.add(Calendar.MONTH, producto.getDuracionGarantia());
 
-			return fechaActual.before(fechaVencimiento.getTime())
-					|| fechaActual.equals(fechaVencimiento.getTime());
+			return fechaActual.before(fechaVencimiento.getTime()) || fechaActual.equals(fechaVencimiento.getTime());
 		} catch (Exception e) {
 			log.error(e, e);
 			throw e;
 		}
 	}
 
-	public List<TipoFallas> listTipoFallasByFilter(FilterTipoFallas filter)
-			throws Exception {
+	public List<TipoFallas> listTipoFallasByFilter(FilterTipoFallas filter) throws Exception {
 		try {
 			return tipoFallasDAO.listTipoFallasByFilter(filter);
 		} catch (Exception e) {
@@ -476,8 +468,7 @@ public class SucursalService {
 		}
 	}
 
-	public List<TipoFallas> listTipoFallasByIdProducto(Integer idProducto)
-			throws Exception {
+	public List<TipoFallas> listTipoFallasByIdProducto(Integer idProducto) throws Exception {
 		try {
 			return tipoFallasDAO.listTipoFallasByIdProducto(idProducto);
 		} catch (Exception e) {
@@ -486,24 +477,18 @@ public class SucursalService {
 		}
 	}
 
-	public List<List<TipoFallas>> listTipoFallasCrearOT(OrdenTrabajo oT)
-			throws Exception {
+	public List<List<TipoFallas>> listTipoFallasCrearOT(OrdenTrabajo oT) throws Exception {
 		try {
-			List<TipoFallas> fallasProducto = tipoFallasDAO
-					.listTipoFallasByIdProducto(oT.getProducto().getId());
+			List<TipoFallas> fallasProducto = tipoFallasDAO.listTipoFallasByIdProducto(oT.getProducto().getId());
 
 			if (fallasProducto.size() == 0) {
-				Producto producto = productoDAO.getProductoById(oT
-						.getProducto().getId());
-				fallasProducto = tipoFallasDAO
-						.listTipoFallasByIdFamilia(producto.getFamilia()
-								.getId());
+				Producto producto = productoDAO.getProductoById(oT.getProducto().getId());
+				fallasProducto = tipoFallasDAO.listTipoFallasByIdFamilia(producto.getFamilia().getId());
 			}
 
 			// Separa las fallas asiganadas a la OT y las que no estÃ¡n
 			// asiganadas
-			List<TipoFallas> fallasOT = tipoFallasDAO.listFallasOTById(oT
-					.getId());
+			List<TipoFallas> fallasOT = tipoFallasDAO.listFallasOTById(oT.getId());
 
 			for (TipoFallas fallaOT : fallasOT) {
 				for (TipoFallas fallaProducto : fallasProducto) {
@@ -526,8 +511,7 @@ public class SucursalService {
 		}
 	}
 
-	public List<Accesorio> listAccesoriosByFilter(FilterAccesorio filter)
-			throws Exception {
+	public List<Accesorio> listAccesoriosByFilter(FilterAccesorio filter) throws Exception {
 		try {
 			if (filter.getIdTipoFalla() != null) {
 				return accesorioDAO.listAccesoriosByFilter(filter);
@@ -536,13 +520,11 @@ public class SucursalService {
 				return accesorioDAO.listAccesoriosByFilter(filter);
 			}
 			if (filter.getIdProducto() != null) {
-				List<Accesorio> accesorios = accesorioDAO
-						.listAccesoriosByFilter(filter);
+				List<Accesorio> accesorios = accesorioDAO.listAccesoriosByFilter(filter);
 				if (accesorios.size() != 0) {
 					return accesorios;
 				}
-				Producto producto = productoDAO.getProductoById(filter
-						.getIdProducto());
+				Producto producto = productoDAO.getProductoById(filter.getIdProducto());
 				filter.setIdFamilia(producto.getFamilia().getId());
 				filter.setIdProducto(null);
 				return accesorioDAO.listAccesoriosByFilter(filter);
@@ -557,8 +539,7 @@ public class SucursalService {
 		}
 	}
 
-	public List<Accesorio> listAccesoriosNotExistsByFilter(
-			FilterAccesorio filter) throws Exception {
+	public List<Accesorio> listAccesoriosNotExistsByFilter(FilterAccesorio filter) throws Exception {
 		try {
 			if (filter.getIdTipoFalla() != null) {
 				return accesorioDAO.listAccesoriosNotExistsByFilter(filter);
@@ -567,13 +548,11 @@ public class SucursalService {
 				return accesorioDAO.listAccesoriosNotExistsByFilter(filter);
 			}
 			if (filter.getIdProducto() != null) {
-				List<Accesorio> accesorios = accesorioDAO
-						.listAccesoriosNotExistsByFilter(filter);
+				List<Accesorio> accesorios = accesorioDAO.listAccesoriosNotExistsByFilter(filter);
 				if (accesorios.size() != 0) {
 					return accesorios;
 				}
-				Producto producto = productoDAO.getProductoById(filter
-						.getIdProducto());
+				Producto producto = productoDAO.getProductoById(filter.getIdProducto());
 				filter.setIdFamilia(producto.getFamilia().getId());
 				filter.setIdProducto(null);
 				return accesorioDAO.listAccesoriosNotExistsByFilter(filter);
@@ -597,8 +576,7 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean saveTipoFallas(Long idOT, List<Long> idTipoFallas,
-			FilterOT filterOT) throws Exception {
+	public Boolean saveTipoFallas(Long idOT, List<Long> idTipoFallas, FilterOT filterOT) throws Exception {
 		try {
 			Boolean rt = true;
 			Integer existe = tipoFallasDAO.listTotalFallasByOT(idOT);
@@ -612,8 +590,7 @@ public class SucursalService {
 			for (Accesorio acc : accesorios) {
 				filterFallas.setIdOT(idOT);
 				filterFallas.setIdAccesorio(acc.getId());
-				Integer fallasAc = tipoFallasDAO
-						.listTotalFallasAccesorioByFilter(filterFallas);
+				Integer fallasAc = tipoFallasDAO.listTotalFallasAccesorioByFilter(filterFallas);
 				if (fallasAc == 0) {
 					FilterAccesorio filterAcc = new FilterAccesorio();
 					filterAcc.setIdAccesorio(acc.getId());
@@ -623,20 +600,16 @@ public class SucursalService {
 			}
 
 			for (Long idTF : idTipoFallas) {
-				List<TipoFallas> fallasAcc = tipoFallasDAO
-						.listAccesoriosByidTipoFalla(idTF);
+				List<TipoFallas> fallasAcc = tipoFallasDAO.listAccesoriosByidTipoFalla(idTF);
 				filterFallas.setIdTipoFalla(idTF);
 
-				if (tipoFallasDAO.listTotalFallasOTByFilter(filterFallas)
-						.equals(0)) {
+				if (tipoFallasDAO.listTotalFallasOTByFilter(filterFallas).equals(0)) {
 					if (tipoFallasDAO.saveTipoFallasOT(filterFallas).equals(0)) {
 						rt = false;
 					} else {
 						for (TipoFallas idFA : fallasAcc) {
-							filterFallas.setIdAccesorio(idFA.getAccesorio()
-									.getId());
-							tipoFallasDAO
-									.updateAccesoriosOTByFilter(filterFallas);
+							filterFallas.setIdAccesorio(idFA.getAccesorio().getId());
+							tipoFallasDAO.updateAccesoriosOTByFilter(filterFallas);
 						}
 					}
 				} else {
@@ -655,8 +628,7 @@ public class SucursalService {
 		}
 	}
 
-	public Integer listTotalFallasOTByFilter(FilterTipoFallas filter)
-			throws Exception {
+	public Integer listTotalFallasOTByFilter(FilterTipoFallas filter) throws Exception {
 		try {
 			return tipoFallasDAO.listTotalFallasOTByFilter(filter);
 		} catch (Exception e) {
@@ -686,55 +658,612 @@ public class SucursalService {
 	private void emitirGuiaDestinoCliente(Guia guia) throws Exception {
 		try {
 			guia.setTransportista(new Transportista());
-			updateUbicacionAccesorios(guia, guia.getOrdenTrabajo(),
-					guia.getDestino(), guia.getOrigen());
-			guia.getEstado().setId(
-					Constants.GUIA_ESTADO_EMITIDA_RECIBIDA_NO_REEMISION);
-			if (guiaDAO.update(guia).equals(0))
+			updateUbicacionAccesorios(guia, guia.getOrdenTrabajo(), guia.getDestino(), guia.getOrigen());
+			guia.getEstado().setId(Constants.GUIA_ESTADO_EMITIDA_RECIBIDA_NO_REEMISION);
+			if (guiaDAO.update(guia).equals(0)) {
 				throw new SSTException("Error al actualizar el registro");
+			}
 			saveBitacoraByGuiaAndOTEntregaCliente(guia, guia.getOrdenTrabajo());
 		} catch (Exception e) {
 			throw e;
 		}
 	}
+	
+	private String generarFolioErp(Integer folio)
+	{
+		String folioERP="";
+		
+		if (folio !=null)
+		{
+			if(folio<10)
+			{
+				folioERP="S0000000"+folio;
+			}
+			if(folio>9 && folio<100)
+			{
+				folioERP="S000000"+folio;
+			}
+			if(folio>99 && folio<1000)
+			{
+				folioERP="S00000"+folio;
+			}
+			if(folio>999 && folio<10000)
+			{
+				folioERP="S0000"+folio;
+			}
+			if(folio>9999 && folio<100000)
+			{
+				folioERP="S000"+folio;
+			}
+			if(folio>99999 && folio<1000000)
+			{
+				folioERP="S00"+folio;
+			}
+			
+			if(folio>999999 && folio<10000000)
+			{
+				folioERP="S0"+folio;
+			}
+			
+			if(folio>9999999 && folio<100000000)
+			{
+				folioERP="S"+folio;
+			}
+			
+			
+		}
+		
+		return folioERP;
+	}
+	
+	private Guia actualizaCorrelativo(Guia guia) throws Exception
+	{
+		Guia guiaUp= guia;
+		Integer lastCorr=guiaDAO.getLastCorrelativo();
+		guiaUp.setCorr(lastCorr+1);
+		guiaDAO.updateCorrelativo(guiaUp);
+		return guiaUp;
+	}
+	
+
+	private ArrayList<String> emitirGuiaWS(Long idGuia, String indicador, String rutTrans, Long numero, Guia guia) throws Exception {
+
+		ArrayList<String> resp = null;
+		String folio;
+		
+		
+		if(guia.getCorr()!=null)
+		{
+			folio=generarFolioErp(guia.getCorr());
+		}
+		else
+		{
+			Guia guiab =actualizaCorrelativo(guia);
+			folio=generarFolioErp(guiab.getCorr());
+		}
+			
+
+		try {
+
+			GuiaWebService guiaWs = new GuiaWebService();
+			guiaDAO.updateIdDestino(guia);
+			if (indicador.equalsIgnoreCase("STI")) {
+				guiaWs = guiaDAO.datosTrasladoInterno(idGuia);
+				resp = callLoadCustomerTrasladoInterno(guiaWs, rutTrans, Constants.WS_LOAD_IND_TRASLADO_INTERNO, numero, guia,folio);
+			} else if (indicador.equalsIgnoreCase("STA")) {
+				guiaWs = guiaDAO.datosTrasladoServicioTecnico(idGuia);
+				resp = callLoadCustomerSTA(guiaWs, rutTrans,Constants.WS_LOAD_IND_TRASLADO_NO_INTERNO, numero, guia,folio);
+			} else if (indicador.equalsIgnoreCase("SEC")) {
+				guiaWs = guiaDAO.datosTrasladoCliente(idGuia);
+				resp = callLoadCustomerTrasladoCliente(guiaWs, rutTrans,Constants.WS_LOAD_IND_TRASLADO_NO_INTERNO, numero, guia,folio);
+			}
+		} catch (Exception ex) {
+			throw ex;
+		}
+		return resp;
+	}
+
+	// WS LOAD
+	private ArrayList<String> callLoadCustomerTrasladoCliente(GuiaWebService guiaWs, String rutTrans,String ind, Long numero, Guia guia,String folio) {
+
+		ArrayList<String> respuestaWS = new ArrayList<String>();
+
+		try {
+
+			// Valores libres
+			
+
+			String req = "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:cus=\"http://www.dbnet.cl/CustomerETDLoadASP\">\r\n"
+					+ "   <soapenv:Header>\r\n"
+					+ "      <wsse:Security soapenv:mustUnderstand=\"1\" xmlns:wsse=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\" xmlns:wsu=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd\">\r\n"
+					+ "         <wsse:UsernameToken wsu:Id=\"UsernameToken-B936B913BC8AD7526A15681202842593\">\r\n"
+					+ "            <wsse:Username>" + Constants.WS_LOAD_SECURITY_USERNAME + "</wsse:Username>\r\n"
+					+ "            <wsse:Password Type=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText\">"
+					+ Constants.WS_LOAD_SECURITY_PASSWORD + "</wsse:Password>\r\n"
+					+ "            <wsse:Nonce EncodingType=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary\">"
+					+ Constants.WS_LOAD_SECURITY_NONCE + "</wsse:Nonce>\r\n" + "            <wsu:Created>"
+					+ Constants.WS_LOAD_SECURITY_CREATED + "</wsu:Created>\r\n" + "         </wsse:UsernameToken>\r\n"
+					+ "      </wsse:Security>\r\n" + "   </soapenv:Header>\r\n" + "   <soapenv:Body>\r\n"
+					+ "<cus:putCustomerETDLoad>\r\n" + "         <cus:Extras>\r\n"
+					+ "            <cus:ValoresLibres>\r\n" + "               <cus:ImprDestino>"
+					+ Constants.WS_LOAD_VALOR_LIBRE_IMPRIMIR_DESTINO + "</cus:ImprDestino>\r\n" + "               <cus:ValorLibre2>"
+					+ Constants.WS_LOAD_VALOR_LIBRE2 + "</cus:ValorLibre2>\r\n" + "               <cus:ValorLibre3>" + Constants.WS_LOAD_VALOR_LIBRE3
+					+ "</cus:ValorLibre3>\r\n" + "               <cus:ValorLibre4>" + Constants.WS_LOAD_VALOR_LIBRE4
+					+ "</cus:ValorLibre4>\r\n" + "               <cus:ValorLibre5>" 
+					+ "</cus:ValorLibre5>\r\n" + "               <cus:ValorLibre6>" + Constants.WS_LOAD_VALOR_LIBRE_5_CLIENTE
+					+ "</cus:ValorLibre6>\r\n" + "               <cus:ValorLibre7>" +""
+					+ "</cus:ValorLibre7>\r\n" + "               <cus:ValorLibre8>" + guiaWs.getValorLibre8()
+					+ "</cus:ValorLibre8>\r\n" + "               <cus:ValorLibre9>" +""
+					+ "</cus:ValorLibre9>\r\n" + "               <cus:ValorLibre10>" +""
+					+ "</cus:ValorLibre10>\r\n" + "            </cus:ValoresLibres>\r\n" + "         </cus:Extras>\r\n"
+					+ "         <cus:Encabezado>\r\n" + "            <cus:camposEncabezado>\r\n"
+					+ "               <cus:TipoDTE>" + Constants.WS_LOAD_TIPO_DTE + "</cus:TipoDTE>\r\n"
+					+ "               <cus:Version>" + Constants.WS_LOAD_VERSION + "</cus:Version>\r\n"
+					+ "               <cus:Folio>" + folio + "</cus:Folio>\r\n"
+					+ "               <cus:FchEmis>" + fechaActual() + "</cus:FchEmis>\r\n"
+					+ "               <cus:TipoDespacho>" + Constants.WS_LOAD_TIPODESPACHO + "</cus:TipoDespacho>\r\n"
+					+ "               <cus:IndTraslado>" + ind + "</cus:IndTraslado>\r\n"
+					+ "               <cus:RUTEmisor>" + AuxConverter.calculaDV(guiaWs.getRutEmisor())
+					+ "</cus:RUTEmisor>\r\n" + "               <cus:RznSoc>" + guiaWs.getRznSoc() + "</cus:RznSoc>\r\n"
+					+ "               <cus:GiroEmis>" + guiaWs.getGiroRecep() + "</cus:GiroEmis>\r\n"
+					+ "               <cus:Sucursal>" + guiaWs.getSucursal() + "</cus:Sucursal>\r\n"
+					+ "               <cus:DirOrigen>" + guiaWs.getDirOrigen() + "</cus:DirOrigen>\r\n"
+					+ "               <cus:CmnaOrigen>" + guiaWs.getCmnaOrigen() + "</cus:CmnaOrigen>\r\n"
+					+ "               <cus:CiudadOrigen>" + guiaWs.getCiudadOrigen() + "</cus:CiudadOrigen>\r\n"
+					+ "               <cus:RUTRecep>"+ AuxConverter.calculaDV(guiaWs.getRutRecep())
+					+ "</cus:RUTRecep>\r\n" + "               <cus:RznSocRecep>" + guiaWs.getRznSocRecepCliente()
+					+ "</cus:RznSocRecep>\r\n" + "               <cus:GiroRecep>" + guiaWs.getGiroRecepCliente()
+					+ "</cus:GiroRecep>\r\n" + "               <cus:Telefono>" + Constants.WS_LOAD_TELEFONO + "</cus:Telefono>\r\n"
+					+ "               <cus:DirRecep>" + guiaWs.getDirRecepCliente() + "</cus:DirRecep>\r\n"
+					+ "               <cus:CmnaRecep>" + guiaWs.getCmnaRecep() + "</cus:CmnaRecep>\r\n"
+					+ "               <cus:CiudadRecep>" + guiaWs.getCiudadRecep() + "</cus:CiudadRecep>\r\n"
+					+ "               <cus:Patente>" + Constants.WS_LOAD_PATENTE + "</cus:Patente>\r\n"
+					+ "               <cus:RUTTrans></cus:RUTTrans>\r\n"
+					+ "               <cus:DirDest>" + guiaWs.getDirDest() + "</cus:DirDest>\r\n"
+					+ "               <cus:CmnaDest>" + guiaWs.getCmnaDest() + "</cus:CmnaDest>\r\n"
+					+ "               <cus:CiudadDest>" + guiaWs.getCiudadDest() + "</cus:CiudadDest>\r\n"
+					+ "               <cus:MntNeto>" + Constants.WS_LOAD_MNT_NETO + "</cus:MntNeto>\r\n"
+					+ "               <cus:MntExe>" + Constants.WS_LOAD_MNT_EXE + "</cus:MntExe>\r\n" + "               <cus:TasaIVA>"
+					+ Constants.WS_LOAD_TASA_IVA + "</cus:TasaIVA>\r\n" + "               <cus:IVA>"
+					+ Constants.WS_LOAD_IVA + "</cus:IVA>\r\n" + "               <cus:MntTotal>"
+					+ Constants.WS_LOAD_MNT_TOTAL + "</cus:MntTotal>\r\n" + "               <cus:RUTChofer>"
+					+ Constants.WS_LOAD_RUT_CHOFER + "</cus:RUTChofer>\r\n" + "               <cus:NombreChofer>" + Constants.WS_LOAD_NOMBRE_CHOFER
+					+ "</cus:NombreChofer>\r\n" + "               <cus:NombreTransp>" + Constants.WS_LOAD_NOMBRE_TRANSP
+					+ "</cus:NombreTransp>\r\n" + "            </cus:camposEncabezado>\r\n"
+					+ "            <cus:ActivEcon>\r\n" + "               <cus:ActividadEconomica>\r\n"
+					+ "                  <cus:ActivEcon>" + guiaWs.getActiveEcon() + "</cus:ActivEcon>\r\n"
+					+ "               </cus:ActividadEconomica>\r\n" + "            </cus:ActivEcon>\r\n"
+					+ "         </cus:Encabezado>\r\n" + "            <cus:Detalles>\r\n"
+					+ "               <cus:Detalle>\r\n" + "                  <cus:Detalles>\r\n"
+					+ "                     <cus:NroLinDet>" + Constants.WS_LOAD_NRO_LIN_DET + "</cus:NroLinDet>\r\n"
+					+ "                     <cus:NmbItem>" + guiaWs.getNmbItem() + "</cus:NmbItem>\r\n"
+					+ "                     <cus:DscItem>" + Constants.WS_LOAD_DSC_IEM + "</cus:DscItem>\r\n"
+					+ "                     <cus:QtyItem>" + Constants.WS_LOAD_QTY_ITEM + "</cus:QtyItem>\r\n"
+					+ "                     <cus:PrcItem>" + Constants.WS_LOAD_PRC_ITEM + "</cus:PrcItem>\r\n"
+					+ "                     <cus:MontoItem>" + Constants.WS_LOAD_MONTO_ITEM + "</cus:MontoItem>\r\n"
+					+ "                  </cus:Detalles>\r\n" + "                  <cus:CodItems>\r\n"
+					+ "                     <cus:CodItems>\r\n" + "                        <cus:TpoCodigo>"
+					+ Constants.WS_LOAD_TIPO_CODIGO + "</cus:TpoCodigo>\r\n" + "                        <cus:CodItem>"
+					+ guiaWs.getVlrCodigo() + "</cus:CodItem>\r\n" + "                     </cus:CodItems>\r\n"
+					+ "                  </cus:CodItems>\r\n" + "               </cus:Detalle>\r\n"
+					+ "         </cus:Detalles>\r\n" + "         <cus:DescuentosRecargosyOtros>\r\n"
+					+ "            <cus:Referencias>\r\n" + "               <cus:Referencias>\r\n"
+					+ "                  <cus:NroLinRef>" + Constants.WS_LOAD_NROLINREFM + "</cus:NroLinRef>\r\n"
+					+ "                  <cus:TpoDocRef>" + Constants.WS_LOAD_TIPODOCREF + "</cus:TpoDocRef>\r\n"
+					+ "                  <cus:FolioRef>" + guiaWs.getFolioRef() + "</cus:FolioRef>\r\n"
+					+ "                  <cus:FchRef>" + fechaActual()+ "</cus:FchRef>\r\n"
+					+ "                  <cus:RazonRef>" + Constants.WS_LOAD_RAZON_SOCIAL_REF + "</cus:RazonRef>\r\n"
+					+ "               </cus:Referencias>\r\n" + "            </cus:Referencias>\r\n"
+					+ "         </cus:DescuentosRecargosyOtros>\r\n" + "      </cus:putCustomerETDLoad>\r\n"
+					+ "   </soapenv:Body>\r\n" + "</soapenv:Envelope>";
+
+			
+			System.out.println("---------- request generar guia traslado cliente ----------");
+			System.out.println(req);
+			
+			
+			
+			respuestaWS = AuxLoad.consume(Constants.WS_LOAD_PROTOCOL, Constants.WS_LOAD_WSDL, Constants.WS_LOAD_HOST,
+					Constants.WS_LOAD_SOAPACTION, req);
+
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		return respuestaWS;
+	}
+
+	// CallTraslsadoSTA
+	//fsfsdfdsfds
+	private ArrayList<String> callLoadCustomerSTA(GuiaWebService guiaWs, String rutTrans, String ind, Long numero, Guia guia,String folio) {
+
+		ArrayList<String> respuestaWS = new ArrayList<String>();
+
+		try {
+
+			// Valores libres
+			
+
+						String req = "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:cus=\"http://www.dbnet.cl/CustomerETDLoadASP\">\r\n"
+								+ "   <soapenv:Header>\r\n"
+								+ "      <wsse:Security soapenv:mustUnderstand=\"1\" xmlns:wsse=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\" xmlns:wsu=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd\">\r\n"
+								+ "         <wsse:UsernameToken wsu:Id=\"UsernameToken-B936B913BC8AD7526A15681202842593\">\r\n"
+								+ "            <wsse:Username>" + Constants.WS_LOAD_SECURITY_USERNAME + "</wsse:Username>\r\n"
+								+ "            <wsse:Password Type=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText\">"
+								+ Constants.WS_LOAD_SECURITY_PASSWORD + "</wsse:Password>\r\n"
+								+ "            <wsse:Nonce EncodingType=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary\">"
+								+ Constants.WS_LOAD_SECURITY_NONCE + "</wsse:Nonce>\r\n" + "            <wsu:Created>"
+								+ Constants.WS_LOAD_SECURITY_CREATED + "</wsu:Created>\r\n" + "         </wsse:UsernameToken>\r\n"
+								+ "      </wsse:Security>\r\n" + "   </soapenv:Header>\r\n" + "   <soapenv:Body>\r\n"
+								+ "<cus:putCustomerETDLoad>\r\n" + "         <cus:Extras>\r\n"
+								+ "            <cus:ValoresLibres>\r\n" + "               <cus:ImprDestino>"
+								+ Constants.WS_LOAD_VALOR_LIBRE_IMPRIMIR_DESTINO + "</cus:ImprDestino>\r\n" + "               <cus:ValorLibre2>"
+								+ Constants.WS_LOAD_VALOR_LIBRE2 + "</cus:ValorLibre2>\r\n" + "               <cus:ValorLibre3>" + Constants.WS_LOAD_VALOR_LIBRE3
+								+ "</cus:ValorLibre3>\r\n" + "               <cus:ValorLibre4>" + Constants.WS_LOAD_VALOR_LIBRE4
+								+ "</cus:ValorLibre4>\r\n" + "               <cus:ValorLibre5>"+""
+								+ "</cus:ValorLibre5>\r\n" + "               <cus:ValorLibre6>" +  Constants.WS_LOAD_VALOR_LIBRE_5_STA
+								+ "</cus:ValorLibre6>\r\n" + "               <cus:ValorLibre7>" + ""
+								+ "</cus:ValorLibre7>\r\n" + "               <cus:ValorLibre8>" + guiaWs.getValorLibre8()
+								+ "</cus:ValorLibre8>\r\n" + "               <cus:ValorLibre9>" + ""
+								+ "</cus:ValorLibre9>\r\n" + "               <cus:ValorLibre10>" + ""
+								+ "</cus:ValorLibre10>\r\n" + "            </cus:ValoresLibres>\r\n" + "         </cus:Extras>\r\n"
+								+ "         <cus:Encabezado>\r\n" + "            <cus:camposEncabezado>\r\n"
+								+ "               <cus:TipoDTE>" + Constants.WS_LOAD_TIPO_DTE + "</cus:TipoDTE>\r\n"
+								+ "               <cus:Version>" + Constants.WS_LOAD_VERSION + "</cus:Version>\r\n"
+								+ "               <cus:Folio>" + folio + "</cus:Folio>\r\n"
+								+ "               <cus:FchEmis>" + fechaActual() + "</cus:FchEmis>\r\n"
+								+ "               <cus:TipoDespacho>" + Constants.WS_LOAD_TIPODESPACHO + "</cus:TipoDespacho>\r\n"
+								+ "               <cus:IndTraslado>" + ind + "</cus:IndTraslado>\r\n"
+								+ "               <cus:RUTEmisor>" + AuxConverter.calculaDV(guiaWs.getRutEmisor())
+								+ "</cus:RUTEmisor>\r\n" + "               <cus:RznSoc>" + guiaWs.getRznSoc() + "</cus:RznSoc>\r\n"
+								+ "               <cus:GiroEmis>" +guiaWs.getGiroEmisor()+ "</cus:GiroEmis>\r\n"
+								+ "               <cus:Sucursal>" + guiaWs.getSucursal() + "</cus:Sucursal>\r\n"
+								+ "               <cus:DirOrigen>" + guiaWs.getDirOrigen() + "</cus:DirOrigen>\r\n"
+								+ "               <cus:CmnaOrigen>" + guiaWs.getCmnaOrigen() + "</cus:CmnaOrigen>\r\n"
+								+ "               <cus:CiudadOrigen>" + guiaWs.getCiudadOrigen() + "</cus:CiudadOrigen>\r\n"
+								+ "               <cus:RUTRecep>" +AuxConverter.calculaDV(guiaWs.getRutRecep())
+								+ "</cus:RUTRecep>\r\n" + "               <cus:RznSocRecep>" + guiaWs.getRznSocRecep()
+								+ "</cus:RznSocRecep>\r\n" + "               <cus:GiroRecep>" + guiaWs.getGiroRecepSTA()
+								+ "</cus:GiroRecep>\r\n" + "               <cus:Telefono>" + Constants.WS_LOAD_TELEFONO + "</cus:Telefono>\r\n"
+								+ "               <cus:DirRecep>" + guiaWs.getDirRecep() + "</cus:DirRecep>\r\n"
+								+ "               <cus:CmnaRecep>" + guiaWs.getCmnaRecep() + "</cus:CmnaRecep>\r\n"
+								+ "               <cus:CiudadRecep>" + guiaWs.getCiudadRecep() + "</cus:CiudadRecep>\r\n"
+								+ "               <cus:Patente>" + Constants.WS_LOAD_PATENTE + "</cus:Patente>\r\n"
+								+ "               <cus:RUTTrans>" + AuxConverter.calculaDV(rutTrans) + "</cus:RUTTrans>\r\n"
+								+ "               <cus:DirDest>" + guiaWs.getDirDest() + "</cus:DirDest>\r\n"
+								+ "               <cus:CmnaDest>" + guiaWs.getCmnaDest() + "</cus:CmnaDest>\r\n"
+								+ "               <cus:CiudadDest>" + guiaWs.getCiudadDest() + "</cus:CiudadDest>\r\n"
+								+ "               <cus:MntNeto>" + Constants.WS_LOAD_MNT_NETO + "</cus:MntNeto>\r\n"
+								+ "               <cus:MntExe>" + Constants.WS_LOAD_MNT_EXE + "</cus:MntExe>\r\n" + "               <cus:TasaIVA>"
+								+ Constants.WS_LOAD_TASA_IVA + "</cus:TasaIVA>\r\n" + "               <cus:IVA>"
+								+ Constants.WS_LOAD_IVA + "</cus:IVA>\r\n" + "               <cus:MntTotal>"
+								+ Constants.WS_LOAD_MNT_TOTAL + "</cus:MntTotal>\r\n" + "               <cus:RUTChofer>"
+								+ Constants.WS_LOAD_RUT_CHOFER + "</cus:RUTChofer>\r\n" + "               <cus:NombreChofer>" + Constants.WS_LOAD_NOMBRE_CHOFER
+								+ "</cus:NombreChofer>\r\n" + "               <cus:NombreTransp>" + Constants.WS_LOAD_NOMBRE_TRANSP
+								+ "</cus:NombreTransp>\r\n" + "            </cus:camposEncabezado>\r\n"
+								+ "            <cus:ActivEcon>\r\n" + "               <cus:ActividadEconomica>\r\n"
+								+ "                  <cus:ActivEcon>" + guiaWs.getActiveEcon() + "</cus:ActivEcon>\r\n"
+								+ "               </cus:ActividadEconomica>\r\n" + "            </cus:ActivEcon>\r\n"
+								+ "         </cus:Encabezado>\r\n" + "            <cus:Detalles>\r\n"
+								+ "               <cus:Detalle>\r\n" + "                  <cus:Detalles>\r\n"
+								+ "                     <cus:NroLinDet>" + Constants.WS_LOAD_NRO_LIN_DET + "</cus:NroLinDet>\r\n"
+								+ "                     <cus:NmbItem>" + guiaWs.getNmbItem() + "</cus:NmbItem>\r\n"
+								+ "                     <cus:DscItem>" + Constants.WS_LOAD_DSC_IEM + "</cus:DscItem>\r\n"
+								+ "                     <cus:QtyItem>" + Constants.WS_LOAD_QTY_ITEM + "</cus:QtyItem>\r\n"
+								+ "                     <cus:PrcItem>" + Constants.WS_LOAD_PRC_ITEM + "</cus:PrcItem>\r\n"
+								+ "                     <cus:MontoItem>" + Constants.WS_LOAD_MONTO_ITEM + "</cus:MontoItem>\r\n"
+								+ "                  </cus:Detalles>\r\n" + "                  <cus:CodItems>\r\n"
+								+ "                     <cus:CodItems>\r\n" + "                        <cus:TpoCodigo>"
+								+ Constants.WS_LOAD_TIPO_CODIGO + "</cus:TpoCodigo>\r\n" + "                        <cus:CodItem>"
+								+ guiaWs.getVlrCodigo() + "</cus:CodItem>\r\n" + "                     </cus:CodItems>\r\n"
+								+ "                  </cus:CodItems>\r\n" + "               </cus:Detalle>\r\n"
+								+ "         </cus:Detalles>\r\n" + "         <cus:DescuentosRecargosyOtros>\r\n"
+								+ "            <cus:Referencias>\r\n" + "               <cus:Referencias>\r\n"
+								+ "                  <cus:NroLinRef>" + Constants.WS_LOAD_NROLINREFM + "</cus:NroLinRef>\r\n"
+								+ "                  <cus:TpoDocRef>" + Constants.WS_LOAD_TIPODOCREF + "</cus:TpoDocRef>\r\n"
+								+ "                  <cus:FolioRef>" + guiaWs.getFolioRef() + "</cus:FolioRef>\r\n"
+								+ "                  <cus:FchRef>" + fechaActual() + "</cus:FchRef>\r\n"
+								+ "                  <cus:RazonRef>" + Constants.WS_LOAD_RAZON_SOCIAL_REF + "</cus:RazonRef>\r\n"
+								+ "               </cus:Referencias>\r\n" + "            </cus:Referencias>\r\n"
+								+ "         </cus:DescuentosRecargosyOtros>\r\n" + "      </cus:putCustomerETDLoad>\r\n"
+								+ "   </soapenv:Body>\r\n" + "</soapenv:Envelope>";
+
+						System.out.println("---------- Request Generar Guia STA ----------");
+						System.out.println(req);
+						
+						respuestaWS = AuxLoad.consume(Constants.WS_LOAD_PROTOCOL, Constants.WS_LOAD_WSDL, Constants.WS_LOAD_HOST,
+								Constants.WS_LOAD_SOAPACTION, req);
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		return respuestaWS;
+	}
+
+	public String fechaActual() {
+		String pattern = "yyyy-MM-dd";
+		SimpleDateFormat simpleDateFormat = new SimpleDateFormat(pattern);
+		String date = simpleDateFormat.format(new Date());
+		
+		
+		return date;
+	}
+	// callLoadCustomerTrasladoInterno
+	private ArrayList<String> callLoadCustomerTrasladoInterno(GuiaWebService guiaWs, String rutTrans, String ind, Long numero, Guia guia,String folio) {
+
+		ArrayList<String> respuestaWS = new ArrayList<String>();
+
+		try {
+
+			// Valores libres
+			
+
+						String req = "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:cus=\"http://www.dbnet.cl/CustomerETDLoadASP\">\r\n"
+								+ "   <soapenv:Header>\r\n"
+								+ "      <wsse:Security soapenv:mustUnderstand=\"1\" xmlns:wsse=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\" xmlns:wsu=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd\">\r\n"
+								+ "         <wsse:UsernameToken wsu:Id=\"UsernameToken-B936B913BC8AD7526A15681202842593\">\r\n"
+								+ "            <wsse:Username>" + Constants.WS_LOAD_SECURITY_USERNAME + "</wsse:Username>\r\n"
+								+ "            <wsse:Password Type=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText\">"
+								+ Constants.WS_LOAD_SECURITY_PASSWORD + "</wsse:Password>\r\n"
+								+ "            <wsse:Nonce EncodingType=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary\">"
+								+ Constants.WS_LOAD_SECURITY_NONCE + "</wsse:Nonce>\r\n" + "            <wsu:Created>"
+								+ Constants.WS_LOAD_SECURITY_CREATED + "</wsu:Created>\r\n" + "         </wsse:UsernameToken>\r\n"
+								+ "      </wsse:Security>\r\n" + "   </soapenv:Header>\r\n" + "   <soapenv:Body>\r\n"
+								+ "<cus:putCustomerETDLoad>\r\n" + "         <cus:Extras>\r\n"
+								+ "            <cus:ValoresLibres>\r\n" + "               <cus:ImprDestino>"
+								+ Constants.WS_LOAD_VALOR_LIBRE_IMPRIMIR_DESTINO + "</cus:ImprDestino>\r\n" + "               <cus:ValorLibre2>"
+								+ Constants.WS_LOAD_VALOR_LIBRE2 + "</cus:ValorLibre2>\r\n" + "               <cus:ValorLibre3>" + Constants.WS_LOAD_VALOR_LIBRE3
+								+ "</cus:ValorLibre3>\r\n" + "               <cus:ValorLibre4>" + Constants.WS_LOAD_VALOR_LIBRE4
+								+ "</cus:ValorLibre4>\r\n" + "               <cus:ValorLibre5>" 
+								+ "</cus:ValorLibre5>\r\n" + "               <cus:ValorLibre6>" + Constants.WS_LOAD_VALOR_LIBRE_5_TRASLADO_INTERNO
+								+ "</cus:ValorLibre6>\r\n" + "               <cus:ValorLibre7>" + guiaWs.getValorLibre7()
+								+ "</cus:ValorLibre7>\r\n" + "               <cus:ValorLibre8>" + guiaWs.getValorLibre8()
+								+ "</cus:ValorLibre8>\r\n" + "               <cus:ValorLibre9>" + Constants.WS_LOAD_VALOR_LIBRE9
+								+ "</cus:ValorLibre9>\r\n" + "               <cus:ValorLibre10>" + Constants.WS_LOAD_VALOR_LIBRE10
+								+ "</cus:ValorLibre10>\r\n" + "            </cus:ValoresLibres>\r\n" + "         </cus:Extras>\r\n"
+								+ "         <cus:Encabezado>\r\n" + "            <cus:camposEncabezado>\r\n"
+								+ "               <cus:TipoDTE>" + Constants.WS_LOAD_TIPO_DTE + "</cus:TipoDTE>\r\n"
+								+ "               <cus:Version>" + Constants.WS_LOAD_VERSION + "</cus:Version>\r\n"
+								+ "               <cus:Folio>" + folio + "</cus:Folio>\r\n"
+								+ "               <cus:FchEmis>" + fechaActual() + "</cus:FchEmis>\r\n"
+								+ "               <cus:TipoDespacho>" + Constants.WS_LOAD_TIPODESPACHO + "</cus:TipoDespacho>\r\n"
+								+ "               <cus:IndTraslado>" + ind + "</cus:IndTraslado>\r\n"
+								+ "               <cus:RUTEmisor>" + AuxConverter.calculaDV(guiaWs.getRutEmisor())
+								+ "</cus:RUTEmisor>\r\n" + "               <cus:RznSoc>" + guiaWs.getRznSoc() + "</cus:RznSoc>\r\n"
+								+ "               <cus:GiroEmis>" + guiaWs.getGiroRecep() + "</cus:GiroEmis>\r\n"
+								+ "               <cus:Sucursal>" + guiaWs.getSucursal() + "</cus:Sucursal>\r\n"
+								+ "               <cus:DirOrigen>" + guiaWs.getDirOrigen() + "</cus:DirOrigen>\r\n"
+								+ "               <cus:CmnaOrigen>" + guiaWs.getCmnaOrigen() + "</cus:CmnaOrigen>\r\n"
+								+ "               <cus:CiudadOrigen>" + guiaWs.getCiudadOrigen() + "</cus:CiudadOrigen>\r\n"
+								+ "               <cus:RUTRecep>" + AuxConverter.calculaDV(guiaWs.getRutRecep())
+								+ "</cus:RUTRecep>\r\n" + "               <cus:RznSocRecep>" + guiaWs.getRznSoc()
+								+ "</cus:RznSocRecep>\r\n" + "               <cus:GiroRecep>" + guiaWs.getGiroRecep()
+								+ "</cus:GiroRecep>\r\n" + "               <cus:Telefono>" + Constants.WS_LOAD_TELEFONO + "</cus:Telefono>\r\n"
+								+ "               <cus:DirRecep>" + guiaWs.getDirRecep() + "</cus:DirRecep>\r\n"
+								+ "               <cus:CmnaRecep>" + guiaWs.getCmnaRecep() + "</cus:CmnaRecep>\r\n"
+								+ "               <cus:CiudadRecep>" + guiaWs.getCiudadRecep() + "</cus:CiudadRecep>\r\n"
+								+ "               <cus:Patente>" + Constants.WS_LOAD_PATENTE + "</cus:Patente>\r\n"
+								+ "               <cus:RUTTrans>" + AuxConverter.calculaDV(rutTrans) + "</cus:RUTTrans>\r\n"
+								+ "               <cus:DirDest>" + guiaWs.getDirDest() + "</cus:DirDest>\r\n"
+								+ "               <cus:CmnaDest>" + guiaWs.getCmnaDest() + "</cus:CmnaDest>\r\n"
+								+ "               <cus:CiudadDest>" + guiaWs.getCiudadDest() + "</cus:CiudadDest>\r\n"
+								+ "               <cus:MntNeto>" + Constants.WS_LOAD_MNT_NETO + "</cus:MntNeto>\r\n"
+								+ "               <cus:MntExe>" + Constants.WS_LOAD_MNT_EXE + "</cus:MntExe>\r\n" + "               <cus:TasaIVA>"
+								+ Constants.WS_LOAD_TASA_IVA + "</cus:TasaIVA>\r\n" + "               <cus:IVA>"
+								+ Constants.WS_LOAD_IVA + "</cus:IVA>\r\n" + "               <cus:MntTotal>"
+								+ Constants.WS_LOAD_MNT_TOTAL + "</cus:MntTotal>\r\n" + "               <cus:RUTChofer>"
+								+ Constants.WS_LOAD_RUT_CHOFER + "</cus:RUTChofer>\r\n" + "               <cus:NombreChofer>" + Constants.WS_LOAD_NOMBRE_CHOFER
+								+ "</cus:NombreChofer>\r\n" + "               <cus:NombreTransp>" + Constants.WS_LOAD_NOMBRE_TRANSP
+								+ "</cus:NombreTransp>\r\n" + "            </cus:camposEncabezado>\r\n"
+								+ "            <cus:ActivEcon>\r\n" + "               <cus:ActividadEconomica>\r\n"
+								+ "                  <cus:ActivEcon>" + guiaWs.getActiveEcon() + "</cus:ActivEcon>\r\n"
+								+ "               </cus:ActividadEconomica>\r\n" + "            </cus:ActivEcon>\r\n"
+								+ "         </cus:Encabezado>\r\n" + "            <cus:Detalles>\r\n"
+								+ "               <cus:Detalle>\r\n" + "                  <cus:Detalles>\r\n"
+								+ "                     <cus:NroLinDet>" + Constants.WS_LOAD_NRO_LIN_DET + "</cus:NroLinDet>\r\n"
+								+ "                     <cus:NmbItem>" + guiaWs.getNmbItem() + "</cus:NmbItem>\r\n"
+								+ "                     <cus:DscItem>" + Constants.WS_LOAD_DSC_IEM + "</cus:DscItem>\r\n"
+								+ "                     <cus:QtyItem>" + Constants.WS_LOAD_QTY_ITEM + "</cus:QtyItem>\r\n"
+								+ "                     <cus:PrcItem>" + Constants.WS_LOAD_PRC_ITEM + "</cus:PrcItem>\r\n"
+								+ "                     <cus:MontoItem>" + Constants.WS_LOAD_MONTO_ITEM + "</cus:MontoItem>\r\n"
+								+ "                  </cus:Detalles>\r\n" + "                  <cus:CodItems>\r\n"
+								+ "                     <cus:CodItems>\r\n" + "                        <cus:TpoCodigo>"
+								+ Constants.WS_LOAD_TIPO_CODIGO + "</cus:TpoCodigo>\r\n" + "                        <cus:CodItem>"
+								+ guiaWs.getVlrCodigo() + "</cus:CodItem>\r\n" + "                     </cus:CodItems>\r\n"
+								+ "                  </cus:CodItems>\r\n" + "               </cus:Detalle>\r\n"
+								+ "         </cus:Detalles>\r\n" + "         <cus:DescuentosRecargosyOtros>\r\n"
+								+ "            <cus:Referencias>\r\n" + "               <cus:Referencias>\r\n"
+								+ "                  <cus:NroLinRef>" + Constants.WS_LOAD_NROLINREFM + "</cus:NroLinRef>\r\n"
+								+ "                  <cus:TpoDocRef>" + Constants.WS_LOAD_TIPODOCREF + "</cus:TpoDocRef>\r\n"
+								+ "                  <cus:FolioRef>" + guiaWs.getFolioRef() + "</cus:FolioRef>\r\n"
+								+ "                  <cus:FchRef>" + fechaActual() + "</cus:FchRef>\r\n"
+								+ "                  <cus:RazonRef>" + Constants.WS_LOAD_RAZON_SOCIAL_REF + "</cus:RazonRef>\r\n"
+								+ "               </cus:Referencias>\r\n" + "            </cus:Referencias>\r\n"
+								+ "         </cus:DescuentosRecargosyOtros>\r\n" + "      </cus:putCustomerETDLoad>\r\n"
+								+ "   </soapenv:Body>\r\n" + "</soapenv:Envelope>";
+
+						System.out.println("---------- Request Generar Guia Traslado Interno ----------");
+						System.out.println(req);
+						
+			respuestaWS = AuxLoad.consume(Constants.WS_LOAD_PROTOCOL, Constants.WS_LOAD_WSDL, Constants.WS_LOAD_HOST,
+					Constants.WS_LOAD_SOAPACTION, req);
+
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		return respuestaWS;
+	}
+	
+	
+	public static String sqlDateToString(Date date){
+	    if(date != null) {
+	        java.util.Date utilDate = new java.util.Date(date.getTime());
+	        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+	        return dateFormat.format(utilDate);
+	    }
+	    return null;
+	}
 
 	private void emitirGuiaDestinoServicioTecnico(Guia guia) throws Exception {
 		try {
-			guia.getOrdenTrabajo().setEjecutiva(
-					ejecutivaDAO.getEjecutivaByOT(guia.getOrdenTrabajo()
-							.getId()));
+			guia.getOrdenTrabajo().setEjecutiva(ejecutivaDAO.getEjecutivaByOT(guia.getOrdenTrabajo().getId()));
 			FilterOT filter = new FilterOT();
 			filter.setIdOT(guia.getOrdenTrabajo().getId());
 			OrdenTrabajo oT = this.getOTByFilter(filter);
 			if (oT.getProcesadoOW()) {
-				envioRecepcionService.validaStock(guia.getOrigen(),
-						OWConstants.UBICACION_FDP, oT.getProducto(), 1);
-				guia.getEstado().setId(
-						Constants.GUIA_ESTADO_EMITIDA_NO_CONFIRMADA);
+				envioRecepcionService.validaStock(guia.getOrigen(), OWConstants.UBICACION_FDP, oT.getProducto(), 1);
+				guia.getEstado().setId(Constants.GUIA_ESTADO_EMITIDA_NO_CONFIRMADA);
 			} else {
 				guia.getEstado().setId(Constants.GUIA_ESTADO_EMITIDA_RECIBIDA);
 			}
-			guia.getOrdenTrabajo().getEstado()
-					.setId(Constants.OT_ESTADO_REPARACION_ESPERA_CONTRATO);
+			guia.getOrdenTrabajo().getEstado().setId(Constants.OT_ESTADO_REPARACION_ESPERA_CONTRATO);
 			guia.getOrdenTrabajo().setsTecnico(new ServicioTecnico());
-			guia.getOrdenTrabajo().getsTecnico()
-					.setId(guia.getDestino().getId().intValue());
+			guia.getOrdenTrabajo().getsTecnico().setId(guia.getDestino().getId().intValue());
 
-			if (guiaDAO.update(guia).equals(0))
+			if (guiaDAO.update(guia).equals(0)) {
 				throw new SSTException("Error al actualizar el registro");
+			}
 
 			ordenTrabajoDAO.updateEjecutiva(guia.getOrdenTrabajo());
 
 			ordenTrabajoDAO.updateUbicacionSTecnico(guia.getOrdenTrabajo());
 			ordenTrabajoDAO.updateEstadoOT(guia.getOrdenTrabajo());
-			updateUbicacionAccesorios(guia, guia.getOrdenTrabajo(),
-					guia.getDestino(), guia.getOrigen());
+			updateUbicacionAccesorios(guia, guia.getOrdenTrabajo(), guia.getDestino(), guia.getOrigen());
 			saveBitacoraByGuiaAndOT(guia, guia.getOrdenTrabajo());
 
 		} catch (Exception e) {
 			throw e;
 		}
 	}
+
+	// GETPDFSucursal
+	public String getPDFSucursal(String idGuia) throws SSTException {
+
+		ArrayList<String> responseSucursal = null;
+		ArrayList<String> responseCloud = null;
+		String documento = null;
+		GuiaGetPDFWS guia = null;
+		try {
+
+			guia = guiaDAO.findDocumento(Long.parseLong(idGuia));
+			// body
+			String rut="";
+			
+			
+
+			String req = "<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:dbn=\"DBNET\">\n"
+					+ "   <soapenv:Header/>\n" + "   <soapenv:Body>\n" + "      <dbn:get_pdf_sucursal>\n"
+					+ "         <!--Optional:-->\n" + "         <dbn:sRutt>" + AuxConverter.calculaDV(guia.getRutEmisor()) + "</dbn:sRutt>\n"
+					+ "         <!--Optional:-->\n" + "         <dbn:sFolio>" + guia.getFolioDoc() + "</dbn:sFolio>\n"
+					+ "         <!--Optional:-->\n" + "         <dbn:sDoc>" + Constants.ws_GET_PDF_SUCURSAL_DOCUMENTO + "</dbn:sDoc>\n"
+					+ "         <!--Optional:-->\n" + "         <dbn:sMonto>" + Constants.ws_GET_PDF_SUCURSAL_MONTO + "</dbn:sMonto>\n"
+					+ "         <!--Optional:-->\n" + "         <dbn:sFecha>" + sqlDateToString(guia.getFechaEmision()) + "</dbn:sFecha>\n"
+					+ "         <!--Optional:-->\n" + "         <dbn:sRuttt>" + rut + "</dbn:sRuttt>\n"
+					+ "         <dbn:bMerito>" + Constants.ws_GET_PDF_SUCURSAL_MERITO + "</dbn:bMerito>\n"
+					+ "      </dbn:get_pdf_sucursal>\n" + "   </soapenv:Body>\n" + "</soapenv:Envelope>";
+			
+			System.out.println("---------- Request getPDF----------");
+			System.out.println(req);
+			
+			responseSucursal = AuxGetPDF.consume(Constants.ws_GET_PDF_SUCURSAL_PROTOCOL,
+					Constants.ws_GET_PDF_SUCURSAL_WSDL, Constants.ws_GET_PDF_SUCURSAL_HOST,
+					Constants.ws_GET_PDF_SUCURSAL_SOAPACTION, req);
+
+			
+			
+			if (responseSucursal.get(0) == null) {
+				// ServicioSucursal RespondiÃ³ 200
+				if (responseSucursal.get(2).equals("DOK") || responseSucursal.get(2).equals("")) {
+					documento = responseSucursal.get(1);
+				} else {
+					// llamar servicio Cloud
+					responseCloud = getPDFCloud(idGuia);
+					if (responseCloud.get(0) == null) {
+						// Servicio RespondiÃ³ 200
+						if (responseCloud.get(2).contentEquals("DOK")) {
+							documento = responseCloud.get(1);
+						}else {
+							throw new SSTException("En proceso, por favor espere un momento.");
+						}
+					}else {
+						throw new SSTException("En proceso, por favor espere un momento.");
+					}
+				}
+
+			}else {
+				// llamar servicio Cloud
+				responseCloud = getPDFCloud(idGuia);
+				if (responseCloud.get(0) == null) {
+					// Servicio RespondiÃ³ 200
+					if (responseCloud.get(2).contentEquals("DOK")) {
+						documento = responseCloud.get(1);
+					}else {
+						throw new SSTException("En proceso, favor espere un momento.");
+					}
+				}
+				else {
+					throw new SSTException("En proceso, favor espere un momento.");
+				}
+			}
+
+		} catch (NumberFormatException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (SSTException e) {
+			throw e;
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+
+		}
+
+		return documento;
+	}
+
+	public ArrayList<String> getPDFCloud(String idGuia) throws SSTException {
+		ArrayList<String> respuesta = null;
+		GuiaGetPDFWS guia = null;
+		try {
+			guiaDAO.getGuiaByIdGuia(Long.parseLong(idGuia));
+			
+			guia = guiaDAO.findDocumento(Long.parseLong(idGuia));
+			
+			String req = "<soapenv:Envelope xmlns:get=\"http://www.dbnet.cl/getPDF64\" xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"
+					+ "   <soapenv:Header>\n"
+					+ "      <wsse:Security soapenv:mustUnderstand=\"1\" xmlns:wsse=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\" xmlns:wsu=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd\">\n"
+					+ "         <wsse:UsernameToken wsu:Id=\"UsernameToken-2757B372468ED67B7615674435431784\">\n"
+					+ "            <wsse:Username>" + Constants.ws_GET_PDF_CLOUD_SECURITY_USERNAME
+					+ "</wsse:Username>\n"
+					+ "            <wsse:Password Type=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText\">"
+					+ Constants.ws_GET_PDF_CLOUD_SECURITY_PASSWORD + "</wsse:Password>\n"
+					+ "            <wsse:Nonce EncodingType=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary\">"
+					+ Constants.ws_GET_PDF_CLOUD_SECURITY_NONCE + "</wsse:Nonce>\n" + "            <wsu:Created>"
+					+ Constants.ws_GET_PDF_CLOUD_CREATED + "</wsu:Created>\n" + "         </wsse:UsernameToken>\n"
+					+ "      </wsse:Security>\n" + "   </soapenv:Header>\n" + "   <soapenv:Body>\n"
+					+ "      <get:get_pdf>\n" + "         <get:rutt>" + AuxConverter.calculaDV(guia.getRutEmisor()) + "</get:rutt>\n" + "         <get:folio>"
+					+ guia.getFolioDoc() + "</get:folio>\n" + "         <get:doc>" +  Constants.ws_GET_PDF_CLOUD_DOCUMENTO + "</get:doc>\n"
+					+ "         <get:monto>" + Constants.ws_GET_PDF_CLOUD_MONTO + "</get:monto>\n" + "         <get:fecha>" + sqlDateToString(guia.getFechaEmision())
+					+ "</get:fecha>\n" + "         <get:ruttt>" + AuxConverter.calculaDV(guia.getRutReceptor()) + "</get:ruttt>\n" + "         <get:Merito>"
+					+ Constants.ws_GET_PDF_SUCURSAL_MERITO + "</get:Merito>\n" + "      </get:get_pdf>\n" + "   </soapenv:Body>\n"
+					+ "</soapenv:Envelope>\n" + "";
+
+			respuesta = AuxGetPDF.consume(Constants.ws_GET_PDF_CLOUD_PROTOCOL, Constants.ws_GET_PDF_CLOUD_WSDL,
+					Constants.ws_GET_PDF_CLOUD_HOST, Constants.ws_GET_PDF_CLOUD_SOAPACTION, req);
+		
+		} catch (NumberFormatException e) {
+			throw new SSTException("En proceso, favor espere un momento.");
+		} catch (Exception e) {
+			throw new SSTException("En proceso, favor espere un momento.");
+		}
+
+		return respuesta;
+	}
+
+	
 
 	private void emitirGuiaDestinoSucursal(Guia guia) throws Exception {
 		try {
@@ -743,32 +1272,26 @@ public class SucursalService {
 			gestion.setOt(guia.getOrdenTrabajo());
 			gestion.setUsuario(guia.getUsuario());
 			gestion.setGestion(" Cambia la sucursal de destino de la ot, de "
-					+ guia.getOrdenTrabajo().getSucursal().getId() + " a la "
-					+ guia.getDestino().getId());
+					+ guia.getOrdenTrabajo().getSucursal().getId() + " a la " + guia.getDestino().getId());
 			FilterOT filter = new FilterOT();
 			filter.setIdOT(guia.getOrdenTrabajo().getId());
 			OrdenTrabajo oT = this.getOTByFilter(filter);
 			if (oT.getProcesadoOW()) {
-				envioRecepcionService.validaStock(guia.getOrigen(),
-						OWConstants.UBICACION_FDP, oT.getProducto(), 1);
-				guia.getEstado().setId(
-						Constants.GUIA_ESTADO_EMITIDA_NO_CONFIRMADA);
+				envioRecepcionService.validaStock(guia.getOrigen(), OWConstants.UBICACION_FDP, oT.getProducto(), 1);
+				guia.getEstado().setId(Constants.GUIA_ESTADO_EMITIDA_NO_CONFIRMADA);
 			} else {
-				guia.getEstado().setId(
-						Constants.GUIA_ESTADO_EMITIDA_NO_RECIBIDA);
+				guia.getEstado().setId(Constants.GUIA_ESTADO_EMITIDA_NO_RECIBIDA);
 			}
-			guia.getOrdenTrabajo().getEstado()
-					.setId(Constants.OT_ESTADO_TRANSPORTE_POR_RECIBIR);
-			guia.getOrdenTrabajo().getSucursal()
-					.setId(guia.getDestino().getId().intValue());
+			guia.getOrdenTrabajo().getEstado().setId(Constants.OT_ESTADO_TRANSPORTE_POR_RECIBIR);
+			guia.getOrdenTrabajo().getSucursal().setId(guia.getDestino().getId().intValue());
 
-			if (guiaDAO.update(guia).equals(0))
+			if (guiaDAO.update(guia).equals(0)) {
 				throw new SSTException("Error al actualizar el registro");
+			}
 
 			ordenTrabajoDAO.updateUbicacionSucursal(guia.getOrdenTrabajo());
 			ordenTrabajoDAO.updateEstadoOT(guia.getOrdenTrabajo());
-			updateUbicacionAccesorios(guia, guia.getOrdenTrabajo(),
-					ubicacionDAO.get(Constants.UBICACION_ID_TRANSPORTE),
+			updateUbicacionAccesorios(guia, guia.getOrdenTrabajo(), ubicacionDAO.get(Constants.UBICACION_ID_TRANSPORTE),
 					guia.getOrigen());
 			gestionesDAO.saveGestion(gestion);
 			saveBitacoraByGuiaAndOT(guia, guia.getOrdenTrabajo());
@@ -777,13 +1300,65 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean validaStockGuiaUnitaria(Long idGuia, Long idOT)
-			throws Exception {
+	public int anularGuiaWS(String idGuia) throws SSTException {
+		int respuesta = 0;
+
+		try {
+			GuiaGetPDFWS guia = guiaDAO.findDocumento(Long.parseLong(idGuia));
+			
+
+
+			String req = "<soapenv:Envelope xmlns:gui=\"http://dbnetcorp.org/guiaProntoPago\" xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\">\n"
+					+ "   <soapenv:Header>\n"
+					+ "      <wsse:Security soapenv:mustUnderstand=\"1\" xmlns:wsse=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd\" xmlns:wsu=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd\">\n"
+					+ "         <wsse:UsernameToken wsu:Id=\"UsernameToken-82346E64686668A9BF15641514402231\">\n"
+					+ "            <wsse:Username>" + Constants.WS_ANULAR_GUIA_SECURITY_USERNAME + "</wsse:Username>\n"
+					+ "            <wsse:Password Type=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText\">"
+					+ Constants.WS_ANULAR_GUIA_SECURITY_PASSWORD + "</wsse:Password>\n"
+					+ "            <wsse:Nonce EncodingType=\"http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary\">"
+					+ Constants.WS_ANULAR_GUIA_SECURITY_NONCE + "</wsse:Nonce>\n" + "            <wsu:Created>"
+					+ Constants.WS_ANULAR_GUIA_SECURITY_CREATED + "</wsu:Created>\n"
+					+ "         </wsse:UsernameToken>\n" + "      </wsse:Security>\n" + "   </soapenv:Header>\n"
+					+ "   <soapenv:Body>\n" + "      <gui:anulaGuia>\n" + "         <gui:anulacion>\n"
+					+ "            <gui:rutEmpresa>" + guia.getRutEmisor() + "</gui:rutEmpresa>\n"
+					+ "            <gui:tipoDocumento>" + Constants.WS_ANULAR_GUIA_TIPO_DOCUMENTO + "</gui:tipoDocumento>\n"
+					+ "            <gui:folio>" + guia.getFolioDoc() + "</gui:folio>\n" + "            <gui:fechaAnulacion>"
+					+ sqlDateToString(guia.getFechaEmision()) + "</gui:fechaAnulacion>\n"
+					+ "            <!--SegÃºn tipo de anulaciÃ³n, valores posibles 1-2-3-->\n"
+					+ "            <gui:motivoAnulacion>" + Constants.WS_ANULAR_GUIA_MOTIVO_ANULACION + "</gui:motivoAnulacion>\n"
+					+ "            <!--Glosa del motivo de la anulaciÃ³n:-->\n" + "            <gui:descipcionAnulacion>"
+					+ Constants.WS_ANULAR_GUIA_DESC_MOTIVO_ANULACION + "</gui:descipcionAnulacion>\n" + "         </gui:anulacion>\n"
+					+ "      </gui:anulaGuia>\n" + "   </soapenv:Body>\n" + "</soapenv:Envelope>";
+
+			System.out.println("---------- REQUEST ANULAR GUIA ----------");
+			System.out.println(req);
+			
+			respuesta = AuxAnularGuia.consume(Constants.WS_ANULAR_GUIA_PROTOCOL, Constants.WS_ANULAR_GUIA_WSDL,
+					Constants.WS_ANULAR_GUIA_HOST, Constants.WS_ANULAR_GUIA_SOAPACTION, req);
+
+			
+		} catch (NumberFormatException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (SSTException e) {
+			
+			e.printStackTrace();
+			throw e;
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+        
+		System.out.println("Request: "+respuesta);
+		return respuesta;
+	}
+
+	public Boolean validaStockGuiaUnitaria(Long idGuia, Long idOT) throws Exception {
 		Guia guia = guiaDAO.get(idGuia);
 		guia.setOrigen(ubicacionDAO.get(guia.getOrigen().getId()));
 		OrdenTrabajo ordenTrabajo = ordenTrabajoDAO.getOTById(idOT);
-		return envioRecepcionService.validaStock(guia.getOrigen(),
-				OWConstants.UBICACION_FDP, ordenTrabajo.getProducto(), 1);
+		return envioRecepcionService.validaStock(guia.getOrigen(), OWConstants.UBICACION_FDP,
+				ordenTrabajo.getProducto(), 1);
 	}
 
 	public Boolean validaStockGuiaAgrupada(Long idGuia) throws Exception {
@@ -796,29 +1371,20 @@ public class SucursalService {
 		guia.setDestino(destino);
 
 		if (guia.getDestino().getTipo() != null
-				&& guia.getDestino()
-						.getId()
-						.equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF)) {
-			return envioRecepcionService.validaStockAgrupado(guia.getOrigen(),
-					OWConstants.UBICACION_FDP, guia);
+				&& guia.getDestino().getId().equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF)) {
+			return envioRecepcionService.validaStockAgrupado(guia.getOrigen(), OWConstants.UBICACION_FDP, guia);
 		} else if (guia.getDestino().getTipo() != null
-				&& guia.getDestino().getTipo()
-						.equals(Constants.UBICACION_TRANSPORTE)) {
-			return envioRecepcionService.validaStockAgrupado(guia.getOrigen(),
-					Constants.UBICACION_RTR_OW, guia);
-		} else if (guia.getDestino().getTipo() != null
-				&& guia.getDestino().getId().equals(Constants.BODEGA_10000)) {
+				&& guia.getDestino().getTipo().equals(Constants.UBICACION_TRANSPORTE)) {
+			return envioRecepcionService.validaStockAgrupado(guia.getOrigen(), Constants.UBICACION_RTR_OW, guia);
+		} else if (guia.getDestino().getTipo() != null && guia.getDestino().getId().equals(Constants.BODEGA_10000)) {
 			return envioRecepcionService.validaStockAgrupado(guia.getOrigen(),
 					Constants.UBICACION_SERVICIO_TECNICO_AUTORIZADO, guia);
 		} else {
 			FilterOT filterOT = new FilterOT();
 			filterOT.setIdGuiaAgrupada(guia.getId());
-			List<OrdenTrabajo> ots = ordenTrabajoDAO
-					.listOTCambioAuomaticoByFilter(filterOT);
-			return envioRecepcionService.validaStockAgrupado(
-					guia.getOrigen(),
-					oWService.convertUbicaciontoOW(ots.get(0)
-							.getClasificacion().getCodigo()), guia);
+			List<OrdenTrabajo> ots = ordenTrabajoDAO.listOTCambioAuomaticoByFilter(filterOT);
+			return envioRecepcionService.validaStockAgrupado(guia.getOrigen(),
+					oWService.convertUbicaciontoOW(ots.get(0).getClasificacion().getCodigo()), guia);
 		}
 		// ver caso emision transporte, emision a proveedor
 	}
@@ -833,23 +1399,19 @@ public class SucursalService {
 			filter.setIdOT(guia.getOrdenTrabajo().getId());
 			OrdenTrabajo oT = this.getOTByFilter(filter);
 			if (oT.getProcesadoOW()) {
-				envioRecepcionService.validaStock(guia.getOrigen(),
-						OWConstants.UBICACION_FDP, oT.getProducto(), 1);
-				guia.getEstado().setId(
-						Constants.GUIA_ESTADO_EMITIDA_NO_CONFIRMADA);
+				envioRecepcionService.validaStock(guia.getOrigen(), OWConstants.UBICACION_FDP, oT.getProducto(), 1);
+				guia.getEstado().setId(Constants.GUIA_ESTADO_EMITIDA_NO_CONFIRMADA);
 			} else {
-				guia.getEstado().setId(
-						Constants.GUIA_ESTADO_EMITIDA_NO_RECIBIDA);
+				guia.getEstado().setId(Constants.GUIA_ESTADO_EMITIDA_NO_RECIBIDA);
 			}
-			guia.getOrdenTrabajo().getEstado()
-					.setId(Constants.OT_ESTADO_TRANSPORTE_POR_RECIBIR);
+			guia.getOrdenTrabajo().getEstado().setId(Constants.OT_ESTADO_TRANSPORTE_POR_RECIBIR);
 
-			if (guiaDAO.update(guia).equals(0))
+			if (guiaDAO.update(guia).equals(0)) {
 				throw new SSTException("Error al actualizar el registro");
+			}
 
 			ordenTrabajoDAO.updateEstadoOT(guia.getOrdenTrabajo());
-			updateUbicacionAccesorios(guia, guia.getOrdenTrabajo(),
-					ubicacionDAO.get(Constants.UBICACION_ID_TRANSPORTE),
+			updateUbicacionAccesorios(guia, guia.getOrdenTrabajo(), ubicacionDAO.get(Constants.UBICACION_ID_TRANSPORTE),
 					guia.getOrigen());
 			saveBitacoraByGuiaAndOT(guia, guia.getOrdenTrabajo());
 
@@ -860,23 +1422,19 @@ public class SucursalService {
 
 	private void emitirGuiaAccesorioDestinoBRoCD(Guia guia) throws Exception {
 		try {
-			if (guia.getOrdenTrabajo().getTipo().getCodigo()
-					.equals(Constants.TIPO_OT_GARANTIA_MASTER)) {
-				guia.getEstado().setId(
-						Constants.GUIA_ESTADO_EMITIDA_NO_RECIBIDA);
+			if (guia.getOrdenTrabajo().getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_MASTER)) {
+				guia.getEstado().setId(Constants.GUIA_ESTADO_EMITIDA_NO_RECIBIDA);
 			} else {
-				envioRecepcionService.validaStock(guia.getOrigen(),
-						OWConstants.UBICACION_FDP, guia.getOrdenTrabajo()
-								.getProducto(), 1);
-				guia.getEstado().setId(
-						Constants.GUIA_ESTADO_EMITIDA_NO_CONFIRMADA);
+				envioRecepcionService.validaStock(guia.getOrigen(), OWConstants.UBICACION_FDP,
+						guia.getOrdenTrabajo().getProducto(), 1);
+				guia.getEstado().setId(Constants.GUIA_ESTADO_EMITIDA_NO_CONFIRMADA);
 			}
 
-			if (guiaDAO.update(guia).equals(0))
+			if (guiaDAO.update(guia).equals(0)) {
 				throw new SSTException("Error al actualizar el registro");
+			}
 
-			updateUbicacionAccesorios(guia, guia.getOrdenTrabajo(),
-					ubicacionDAO.get(Constants.UBICACION_ID_TRANSPORTE),
+			updateUbicacionAccesorios(guia, guia.getOrdenTrabajo(), ubicacionDAO.get(Constants.UBICACION_ID_TRANSPORTE),
 					guia.getOrigen());
 			saveBitacoraByGuiaAccesorioAndOT(guia, guia.getOrdenTrabajo());
 
@@ -885,14 +1443,13 @@ public class SucursalService {
 		}
 	}
 
-	public void updateUbicacionAccesorios(Guia guia, OrdenTrabajo ordenTrabajo,
-			Ubicacion destino, Ubicacion origen) throws Exception {
+	public void updateUbicacionAccesorios(Guia guia, OrdenTrabajo ordenTrabajo, Ubicacion destino, Ubicacion origen)
+			throws Exception {
 		try {
 			Guia guiaAux = guiaDAO.get(guia.getId());
 			FilterGuia filterGuia = new FilterGuia();
 			filterGuia.setIdGuia(guiaAux.getId());
-			List<Accesorio> accesorios = accesorioDAO
-					.listAccesoriosFromIdGuia(filterGuia);
+			List<Accesorio> accesorios = accesorioDAO.listAccesoriosFromIdGuia(filterGuia);
 			for (Accesorio accesorio : accesorios) {
 				if (accesorio.getUbicacion().getId().equals(origen.getId())) {
 					accesorio.setUbicacion(destino);
@@ -916,8 +1473,7 @@ public class SucursalService {
 		}
 	}
 
-	public List<Integer> validaCodigosDeBarraAccesorios(
-			List<Accesorio> accesorios) throws Exception {
+	public List<Integer> validaCodigosDeBarraAccesorios(List<Accesorio> accesorios) throws Exception {
 		try {
 			FilterOT filter = new FilterOT();
 			List<Integer> idAccesorios = new ArrayList<Integer>();
@@ -935,14 +1491,12 @@ public class SucursalService {
 		}
 	}
 
-	public void updateUbicacionAccesoriosRecibidos(OrdenTrabajo ordenTrabajo,
-			Ubicacion destino, Ubicacion origen, List<Accesorio> accesorios)
-			throws Exception {
+	public void updateUbicacionAccesoriosRecibidos(OrdenTrabajo ordenTrabajo, Ubicacion destino, Ubicacion origen,
+			List<Accesorio> accesorios) throws Exception {
 		try {
 			if (accesorios != null) {
 				for (Accesorio accesorio : accesorios) {
-					if (accesorio.getRecibido() != null
-							&& accesorio.getRecibido()) {
+					if (accesorio.getRecibido() != null && accesorio.getRecibido()) {
 						accesorio.setUbicacion(destino);
 						accesorioDAO.updateUbicacionAccesorio(accesorio);
 					}
@@ -954,8 +1508,7 @@ public class SucursalService {
 		}
 	}
 
-	public Guia emitirGuiaAgrupada(Guia guia, Usuario usuario,
-			Ubicacion ubicacion) throws Exception {
+	public Guia emitirGuiaAgrupada(Guia guia, Usuario usuario, Ubicacion ubicacion) throws Exception {
 		try {
 			guia.setDestino(ubicacionDAO.get(guia.getDestino().getId()));
 			guia.setUsuario(usuario);
@@ -963,22 +1516,19 @@ public class SucursalService {
 			guia.setOrigen(ubicacion);
 			guia.setEntregaCliente(false);
 
-			if (guiaDAO.get(guia.getId()) == null)
-				throw new SSTException(
-						"No existe la guía de despacho en el sistema");
-			if (!guiaDAO.getByNumero(guia.getNumero()).isEmpty())
-				throw new SSTException("Ya existe una guía con el mismo número");
+			if (guiaDAO.get(guia.getId()) == null) {
+				throw new SSTException("No existe la guï¿½a de despacho en el sistema");
+			}
+			if (!guiaDAO.getByNumero(guia.getNumero()).isEmpty()) {
+				throw new SSTException("Ya existe una guï¿½a con el mismo nï¿½mero");
+			}
 
-			if (guia.getDestino().getTipo()
-					.equals(Constants.UBICACION_SERVICIO_TECNICO)) {
+			if (guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
 				// emitirGuiaDestinoServicioTecnico(guia);
-			} else if (guia.getDestino().getTipo()
-					.equals(Constants.UBICACION_SUCURSAL)) {
+			} else if (guia.getDestino().getTipo().equals(Constants.UBICACION_SUCURSAL)) {
 				// emitirGuiaDestinoSucursal(guia);
-			} else if (guia.getDestino().getTipo()
-					.equals(Constants.UBICACION_TRANSPORTE)) {
-				envioRecepcionService.emitirGuiaAgrupadaDestinoTransportista(
-						guia, ubicacion);
+			} else if (guia.getDestino().getTipo().equals(Constants.UBICACION_TRANSPORTE)) {
+				envioRecepcionService.emitirGuiaAgrupadaDestinoTransportista(guia, ubicacion);
 			} else {
 				emitirGuiaAgrupadaDestinoBRoCD(guia);
 			}
@@ -996,8 +1546,7 @@ public class SucursalService {
 		try {
 			FilterOT filterOT = new FilterOT();
 			filterOT.setIdGuiaAgrupada(guia.getId());
-			List<OrdenTrabajo> ots = ordenTrabajoDAO
-					.listOTCambioAuomaticoByFilter(filterOT);
+			List<OrdenTrabajo> ots = ordenTrabajoDAO.listOTCambioAuomaticoByFilter(filterOT);
 
 			FilterAccesorio filterAccesorio = new FilterAccesorio();
 			filterAccesorio.setIdUbicacion(Constants.UBICACION_ID_TRANSPORTE);
@@ -1009,28 +1558,25 @@ public class SucursalService {
 				envioRecepcionService.validaStockAgrupado(guia.getOrigen(),
 						Constants.UBICACION_SERVICIO_TECNICO_AUTORIZADO, guia);
 			} else {
-				envioRecepcionService.validaStockAgrupado(guia.getOrigen(),
-						OWConstants.UBICACION_FDP, guia);
+				envioRecepcionService.validaStockAgrupado(guia.getOrigen(), OWConstants.UBICACION_FDP, guia);
 			}
 
 			guia.getEstado().setId(Constants.GUIA_ESTADO_EMITIDA_NO_CONFIRMADA);
 
-			if (guiaDAO.update(guia).equals(0))
+			if (guiaDAO.update(guia).equals(0)) {
 				throw new SSTException("Error al actualizar el registro");
+			}
 
 			for (OrdenTrabajo ordenTrabajo : ots) {
 				filterAccesorio.setIdOT(ordenTrabajo.getId());
-				updateUbicacionAccesorios(guia, ordenTrabajo,
-						ubicacionDAO.get(Constants.UBICACION_ID_TRANSPORTE),
+				updateUbicacionAccesorios(guia, ordenTrabajo, ubicacionDAO.get(Constants.UBICACION_ID_TRANSPORTE),
 						guia.getOrigen());
 				if (!guia.getDestino().getId().equals(Constants.BODEGA_10000)) {
 					ordenTrabajo.setEstado(new Estado());
-					ordenTrabajo.getEstado().setId(
-							Constants.OT_ESTADO_TRANSPORTE_POR_RECIBIR);
+					ordenTrabajo.getEstado().setId(Constants.OT_ESTADO_TRANSPORTE_POR_RECIBIR);
 				}
 				filterOT.setIdOT(ordenTrabajo.getId());
-				Bitacora bitacora = bitacoraDAO
-						.getByIdGuiaAgrupadaAndOT(filterOT);
+				Bitacora bitacora = bitacoraDAO.getByIdGuiaAgrupadaAndOT(filterOT);
 				ordenTrabajoDAO.updateEstadoOT(ordenTrabajo);
 				saveBitacoraByGuiaAndOT(guia, ordenTrabajo, bitacora);
 			}
@@ -1040,44 +1586,43 @@ public class SucursalService {
 		}
 	}
 
-	public Guia emitirGuia(Long idOT, Guia guia,
-			ServicioTecnico servicioTecnico, Usuario usuario,
-			Ubicacion ubicacion) throws Exception {
-		try {
-			guia.setDestino(ubicacionDAO.get(guia.getDestino().getId()));
-			guia.setOrdenTrabajo(ordenTrabajoDAO.getOTById(idOT));
-			guia.setUsuario(usuario);
-			guia.setEstado(new Estado());
-			guia.setOrigen(ubicacion);
+	public Guia emitirGuiaDB(Long idOT, Guia guia, ServicioTecnico servicioTecnico, Usuario usuario,
+			Ubicacion ubicacion, ArrayList<String> listaWS) throws Exception {
 
-			if (guiaDAO.get(guia.getId()) == null)
-				throw new SSTException(
-						"No existe la guía de despacho en el sistema");
-			if (!(guia.getObservacion() != null && guia.getObservacion()
-					.equals(Constants.GUIA_ENVIADA_SIN_EMISION_GUIA))) {
+		try {
+
+			if (guiaDAO.get(guia.getId()) == null) {
+				throw new SSTException("No existe la guï¿½a de despacho en el sistema");
+			}
+			if (!(guia.getObservacion() != null
+					&& guia.getObservacion().equals(Constants.GUIA_ENVIADA_SIN_EMISION_GUIA))) {
 				if (!guiaDAO.getByNumero(guia.getNumero()).isEmpty()) {
-					throw new SSTException(
-							"Ya existe una guía con el mismo número");
+					throw new SSTException("Ya existe una guï¿½a con el mismo nï¿½mero");
 				}
 			}
 
-			guia.setEntregaCliente(guia.getDestino().getId()
-					.equals(Constants.UBICACION_ID_CLIENTE));
+			guia.setEntregaCliente(guia.getDestino().getId().equals(Constants.UBICACION_ID_CLIENTE));
 
 			if (guia.getEntregaCliente()) {
 				emitirGuiaDestinoCliente(guia);
 			} else {
-				if (guia.getDestino().getTipo()
-						.equals(Constants.UBICACION_SERVICIO_TECNICO)) {
+				if (guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
 					emitirGuiaDestinoServicioTecnico(guia);
-				} else if (guia.getDestino().getTipo()
-						.equals(Constants.UBICACION_SUCURSAL)) {
+				} else if (guia.getDestino().getTipo().equals(Constants.UBICACION_SUCURSAL)) {
 					emitirGuiaDestinoSucursal(guia);
 				} else {
 					emitirGuiaDestinoBRoCD(guia);
 				}
 			}
-
+			Guia upd = new Guia();
+			upd.setId(guia.getId());
+			if (listaWS != null) {
+				if (listaWS.get(3) != null) {
+					upd.setNumero(Long.parseLong(listaWS.get(3)));
+				}
+			}
+		guiaDAO.updateInumero(upd);
+			
 			return guia;
 		} catch (SSTException e) {
 			throw e;
@@ -1087,8 +1632,341 @@ public class SucursalService {
 		}
 	}
 
-	public Guia emitirGuiaAccesorio(Long idOT, Guia guia, Usuario usuario,
-			Ubicacion ubicacion) throws Exception {
+	public Guia emitirGuia(Long idOT, Guia guia, ServicioTecnico servicioTecnico, Usuario usuario, Ubicacion ubicacion, Long numero)
+			throws Exception {
+
+		ArrayList<String> listaWS = null;
+		Guia guiaResponse = new Guia();
+		
+		System.out.println("---------ID_GUIA---------");
+		System.out.println(guia.getId());
+		
+		guia.setDestino(ubicacionDAO.get(guia.getDestino().getId()));
+		guia.setOrdenTrabajo(ordenTrabajoDAO.getOTById(idOT));
+		guia.setUsuario(usuario);
+		guia.setEstado(new Estado());
+		guia.setOrigen(ubicacion);
+		
+		String transportista = "";
+				
+				if (guia.getTransportista()==null)
+				{
+					transportista="0";
+				}
+				else
+				{
+					transportista=String.valueOf(guia.getTransportista().getId());
+				}
+
+
+
+		if (guia.getDestino().getTipo() != null && guia.getOrigen().getTipo() != null) {
+			String indicador;
+
+			if (guia.getOrigen().getTipo().equals(Constants.UBICACION_SUCURSAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_SUCURSAL)) {
+				indicador = Constants.TRASLADO_INTERNO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
+				indicador = Constants.TRASLADO_INTERNO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)) {
+				indicador = Constants.TRASLADO_INTERNO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_SUCURSAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
+				indicador = Constants.TRASLADO_INTERNO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_SUCURSAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)) {
+				indicador = Constants.TRASLADO_INTERNO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_SUCURSAL)) {
+				indicador = Constants.TRASLADO_INTERNO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
+				indicador = Constants.TRASLADO_INTERNO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_SUCURSAL)) {
+				indicador = Constants.TRASLADO_INTERNO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)) {
+				indicador = Constants.TRASLADO_INTERNO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
+				indicador = Constants.TRASLADO_SERVICIO_TECNICO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
+				indicador = Constants.TRASLADO_SERVICIO_TECNICO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_SUCURSAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
+				indicador = Constants.TRASLADO_SERVICIO_TECNICO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO_AUTORIZADO)) {
+				indicador = Constants.TRASLADO_SERVICIO_TECNICO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO_AUTORIZADO)) {
+				indicador = Constants.TRASLADO_SERVICIO_TECNICO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_SUCURSAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO_AUTORIZADO)) {
+				indicador = Constants.TRASLADO_SERVICIO_TECNICO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO_LOCAL)) {
+				indicador = Constants.TRASLADO_SERVICIO_TECNICO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO_LOCAL)) {
+				indicador = Constants.TRASLADO_SERVICIO_TECNICO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_SUCURSAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO_LOCAL)) {
+				indicador = Constants.TRASLADO_SERVICIO_TECNICO;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_CLIENTE)) {
+				indicador = Constants.TRASLADO_CLIENTE;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_CLIENTE)) {
+				indicador = Constants.TRASLADO_CLIENTE;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_SUCURSAL)
+					&& guia.getDestino().getTipo().equals(Constants.UBICACION_CLIENTE)) {
+				indicador = Constants.TRASLADO_CLIENTE;
+				listaWS = emitirGuiaWS(guia.getId(), indicador, transportista, numero, guia);
+				if (listaWS.get(0).equals("2")) {
+					// LLamar metodo emitirGuiaDB
+					guiaResponse = emitirGuiaDB(idOT, guia, servicioTecnico, usuario, ubicacion,listaWS);
+				} else if (listaWS.get(0).equals("1")) {
+					// Error en los datos
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(2));
+				} else {
+					// Error en Servicio
+					throw new SSTException("Error en los datos enviados: " + listaWS.get(1));
+				}
+			}
+			
+
+		}
+		return guiaResponse;
+	}// Fin EmitirGuia
+
+	public Guia emitirGuiaAccesorio(Long idOT, Guia guia, Usuario usuario, Ubicacion ubicacion) throws Exception {
 		try {
 			guia.setDestino(ubicacionDAO.get(guia.getDestino().getId()));
 			guia.setOrdenTrabajo(ordenTrabajoDAO.getOTById(idOT));
@@ -1098,11 +1976,10 @@ public class SucursalService {
 			guia.setEntregaCliente(false);
 			Guia guiaAuxiliar = guiaDAO.get(guia.getId());
 			if (guiaAuxiliar == null) {
-				throw new SSTException(
-						"No existe la guía de despacho en el sistema");
+				throw new SSTException("No existe la guï¿½a de despacho en el sistema");
 			}
 			if (!guiaDAO.getByNumero(guia.getNumero()).isEmpty()) {
-				throw new SSTException("Ya existe una guía con el mismo número");
+				throw new SSTException("Ya existe una guï¿½a con el mismo nï¿½mero");
 			}
 
 			emitirGuiaAccesorioDestinoBRoCD(guia);
@@ -1116,29 +1993,22 @@ public class SucursalService {
 		}
 	}
 
-	public Guia reEmitirGuiaAgrupada(Guia guia, Usuario usuario,
-			Ubicacion origen) throws Exception {
+	public Guia reEmitirGuiaAgrupada(Guia guia, Usuario usuario, Ubicacion origen) throws Exception {
 		try {
 			FilterOT filterOT = new FilterOT();
 			filterOT.setIdGuiaAgrupada(guia.getId());
-			List<OrdenTrabajo> ots = ordenTrabajoDAO
-					.listOTCambioAuomaticoByFilter(filterOT);
+			List<OrdenTrabajo> ots = ordenTrabajoDAO.listOTCambioAuomaticoByFilter(filterOT);
 
 			guia = guiaDAO.get(guia.getId());
 			guia.setDestino(ubicacionDAO.get(guia.getDestino().getId()));
 			guia.setOrigen(ubicacionDAO.get(guia.getOrigen().getId()));
 			Guia guiaNueva = new Guia();
 
-			if (guia.getDestino().getId()
-					.equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF)) {
-				guiaNueva = saveGuiaParaAgrupacion(
-						origen,
-						usuario,
-						ubicacionDAO
-								.get(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF));
-			} else if (guia.getDestino().getId().equals(Constants.BODEGA_10000)) {
+			if (guia.getDestino().getId().equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF)) {
 				guiaNueva = saveGuiaParaAgrupacion(origen, usuario,
-						ubicacionDAO.get(Constants.BODEGA_10000));
+						ubicacionDAO.get(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF));
+			} else if (guia.getDestino().getId().equals(Constants.BODEGA_10000)) {
+				guiaNueva = saveGuiaParaAgrupacion(origen, usuario, ubicacionDAO.get(Constants.BODEGA_10000));
 			}
 
 			for (OrdenTrabajo ordenTrabajo : ots) {
@@ -1146,8 +2016,7 @@ public class SucursalService {
 				ordenTrabajoDAO.updateRollbackEstadoGuia(ordenTrabajo);
 				ordenTrabajoDAO.updateEstadoOT(ordenTrabajo);
 
-				Bitacora bitacora = bitacoraDAO
-						.getByIdGuiaAgrupadaAndOT(filterOT);
+				Bitacora bitacora = bitacoraDAO.getByIdGuiaAgrupadaAndOT(filterOT);
 				bitacora.setOrdenTrabajo(ordenTrabajo);
 				bitacora.setFechaSalida(null);
 				bitacora.setGuia(guiaNueva);
@@ -1158,21 +2027,16 @@ public class SucursalService {
 				bitacoraDAO.updateAsignaBitacoraAGuia(bitacora);
 				ordenTrabajoDAO.updateRollbackEstadoGuia(ordenTrabajo);
 
-				if (guia.getDestino().getTipo()
-						.equals(Constants.UBICACION_SERVICIO_TECNICO)) {
-					updateUbicacionAccesorios(guia, ordenTrabajo,
-							guia.getOrigen(), guia.getDestino());
+				if (guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
+					updateUbicacionAccesorios(guia, ordenTrabajo, guia.getOrigen(), guia.getDestino());
 				} else {
-					updateUbicacionAccesorios(guia, ordenTrabajo,
-							guia.getOrigen(),
+					updateUbicacionAccesorios(guia, ordenTrabajo, guia.getOrigen(),
 							ubicacionDAO.get(Constants.UBICACION_ID_TRANSPORTE));
 				}
 
-				List<Accesorio> accesoriosOT = accesorioDAO
-						.listAccesoriosByOT(ordenTrabajo.getId());
+				List<Accesorio> accesoriosOT = accesorioDAO.listAccesoriosByOT(ordenTrabajo.getId());
 				for (Accesorio accesorio : accesoriosOT) {
-					if (accesorio.getUbicacion().getTipo()
-							.equals(origen.getTipo())) {
+					if (accesorio.getUbicacion().getTipo().equals(origen.getTipo())) {
 						accesorio.setGuia(guiaNueva);
 						accesorioDAO.updateIdGuiaFromAccesorio(accesorio);
 					}
@@ -1195,26 +2059,30 @@ public class SucursalService {
 		}
 	}
 
-	public Guia reEmitirGuia(Long idOT, Guia guia,
-			ServicioTecnico servicioTecnico, Usuario usuario, Ubicacion origen)
+	public Guia reEmitirGuia(Long idOT, Guia guia, ServicioTecnico servicioTecnico, Usuario usuario, Ubicacion origen)
 			throws Exception {
+
 		try {
-			Bitacora bitacora = bitacoraDAO.getByIdGuia(guia.getId());
-			bitacora.setOrdenTrabajo(ordenTrabajoDAO.getOTById(idOT));
-			bitacora.setFechaSalida(null);
-			Guia guiaForAccesorios = guiaDAO.get(guia.getId());
-			guiaForAccesorios.setDestino(ubicacionDAO.get(guiaForAccesorios
-					.getDestino().getId()));
-			guiaForAccesorios.setOrigen(ubicacionDAO.get(guiaForAccesorios
-					.getOrigen().getId()));
+             Bitacora bitacora = bitacoraDAO.getByIdGuia(guia.getId());
+             bitacora.setOrdenTrabajo(ordenTrabajoDAO.getOTById(idOT));
+             bitacora.setFechaSalida(null);
+			 Guia guiaForAccesorios = guiaDAO.get(guia.getId());
+			 guiaForAccesorios.setDestino(ubicacionDAO.get(guiaForAccesorios.getDestino().getId()));
+			 guiaForAccesorios.setOrigen(ubicacionDAO.get(guiaForAccesorios.getOrigen().getId()));
+			//
 			guia.setOrdenTrabajo(bitacora.getOrdenTrabajo());
+			//guia.setOrdenTrabajo(guia.getOrdenTrabajo());
+			//
 			guia.setEstado(new Estado());
 			guia.getEstado().setId(Constants.GUIA_ESTADO_DESACTIVADA);
 			guia.setVigente(false);
 			guia.setTipoGuia(Constants.GUIA_TIPO_UNITARIA);
 			guiaDAO.updateEstado(guia);
-			ordenTrabajoDAO
-					.updateRollbackEstadoGuia(bitacora.getOrdenTrabajo());
+			//
+//            ordenTrabajoDAO.updateRollbackEstadoGuia(bitacora.getOrdenTrabajo());
+			ordenTrabajoDAO.updateRollbackEstadoGuia(guia.getOrdenTrabajo());
+
+			//
 			Guia guiaNueva = new Guia();
 			guiaNueva.setEstado(new Estado());
 			guiaNueva.setOrdenTrabajo(guia.getOrdenTrabajo());
@@ -1226,23 +2094,19 @@ public class SucursalService {
 			guiaNueva.setTipoGuia(Constants.GUIA_TIPO_UNITARIA);
 			guiaDAO.save(guiaNueva);
 
-			asignarGuiaToAccesorios(guiaNueva,
-					accesorioDAO.listAllAccesoriosFromTipoGuia(guia));
+			asignarGuiaToAccesorios(guiaNueva, accesorioDAO.listAllAccesoriosFromTipoGuia(guia));
 
-			if (guiaForAccesorios.getDestino().getTipo()
-					.equals(Constants.UBICACION_SERVICIO_TECNICO)) {
-				updateUbicacionAccesorios(guiaNueva, guia.getOrdenTrabajo(),
-						guiaForAccesorios.getOrigen(),
+			if (guiaForAccesorios.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
+				updateUbicacionAccesorios(guiaNueva, guia.getOrdenTrabajo(), guiaForAccesorios.getOrigen(),
 						guiaForAccesorios.getDestino());
 			} else {
-				updateUbicacionAccesorios(guiaNueva, guia.getOrdenTrabajo(),
-						guiaForAccesorios.getOrigen(),
+				updateUbicacionAccesorios(guiaNueva, guia.getOrdenTrabajo(), guiaForAccesorios.getOrigen(),
 						ubicacionDAO.get(Constants.UBICACION_ID_TRANSPORTE));
 			}
 
-			bitacoraDAO.deleteBitacoraMayoresByOT(bitacora);
-			bitacoraDAO.updateFechaSalida(bitacora);
-
+			// DESCOMENTAR
+//            bitacoraDAO.deleteBitacoraMayoresByOT(bitacora);
+//            bitacoraDAO.updateFechaSalida(bitacora);
 			Bitacora bitacoraNueva = new Bitacora();
 			bitacoraNueva.setGuia(guiaNueva);
 			bitacoraNueva.setOrdenTrabajo(guiaNueva.getOrdenTrabajo());
@@ -1259,8 +2123,7 @@ public class SucursalService {
 		}
 	}
 
-	public void asignarGuiaToAccesorios(Guia guia, List<Accesorio> accesorios)
-			throws Exception {
+	public void asignarGuiaToAccesorios(Guia guia, List<Accesorio> accesorios) throws Exception {
 		try {
 			for (Accesorio accesorio : accesorios) {
 				accesorio.setGuia(guia);
@@ -1272,11 +2135,9 @@ public class SucursalService {
 		}
 	}
 
-	public Guia reEmitirGuiaAccesorio(Long idOT, Guia guia, Usuario usuario,
-			Ubicacion origen) throws Exception {
+	public Guia reEmitirGuiaAccesorio(Long idOT, Guia guia, Usuario usuario, Ubicacion origen) throws Exception {
 		try {
-			Bitacora bitacora = bitacoraDAO.getBitacoraAccesorioByIdGuia(guia
-					.getId());
+			Bitacora bitacora = bitacoraDAO.getBitacoraAccesorioByIdGuia(guia.getId());
 			bitacora.setOrdenTrabajo(ordenTrabajoDAO.getOTById(idOT));
 			bitacora.setFechaSalida(null);
 			guia.setOrdenTrabajo(bitacora.getOrdenTrabajo());
@@ -1285,8 +2146,7 @@ public class SucursalService {
 			guia.setVigente(false);
 			guia.setTipoGuia(Constants.GUIA_TIPO_ACCESORIO);
 			guiaDAO.updateEstado(guia);
-			ordenTrabajoDAO
-					.updateRollbackEstadoGuia(bitacora.getOrdenTrabajo());
+			ordenTrabajoDAO.updateRollbackEstadoGuia(bitacora.getOrdenTrabajo());
 
 			Guia guiaNueva = new Guia();
 			guiaNueva.setEstado(new Estado());
@@ -1299,10 +2159,8 @@ public class SucursalService {
 			guiaNueva.setTipoGuia(Constants.GUIA_TIPO_ACCESORIO);
 			guiaDAO.save(guiaNueva);
 
-			asignarGuiaToAccesorios(guiaNueva,
-					accesorioDAO.listAllAccesoriosFromTipoGuia(guia));
-			updateUbicacionAccesorios(guiaNueva, guia.getOrdenTrabajo(),
-					guiaNueva.getOrigen(),
+			asignarGuiaToAccesorios(guiaNueva, accesorioDAO.listAllAccesoriosFromTipoGuia(guia));
+			updateUbicacionAccesorios(guiaNueva, guia.getOrdenTrabajo(), guiaNueva.getOrigen(),
 					ubicacionDAO.get(Constants.UBICACION_ID_TRANSPORTE));
 
 			bitacoraDAO.deleteBitacoraAccesoriosMayoresByOT(bitacora);
@@ -1324,8 +2182,7 @@ public class SucursalService {
 		}
 	}
 
-	public void saveBitacoraByGuiaAndOT(Guia guia, OrdenTrabajo ordenTrabajo,
-			Bitacora bitacora) throws Exception {
+	public void saveBitacoraByGuiaAndOT(Guia guia, OrdenTrabajo ordenTrabajo, Bitacora bitacora) throws Exception {
 		try {
 			if (bitacora != null) {
 				bitacora.setOrdenTrabajo(ordenTrabajo);
@@ -1335,78 +2192,62 @@ public class SucursalService {
 				// cerrar la bitacora interna en caso de que exista (corregido
 				// en las pruebas integrales 01/08/1013, en el flujo recibir OT
 				// en 10015 y luego enviar a ST)
-				BitacoraInterna bitacoraInterna = bitacoraInternaDAO
-						.getBitacoraInternaById(ordenTrabajo.getId());
+				BitacoraInterna bitacoraInterna = bitacoraInternaDAO.getBitacoraInternaById(ordenTrabajo.getId());
 				if (bitacoraInterna != null) {
-					bitacoraInternaDAO.cerrarBitacoraInternaByIdOT(ordenTrabajo
-							.getId());
+					bitacoraInternaDAO.cerrarBitacoraInternaByIdOT(ordenTrabajo.getId());
 				}
 
-				if (guia.getOrigen().getTipo()
-						.equals(Constants.UBICACION_SUCURSAL)) {
-					if (guia.getDestino().getTipo()
-							.equals(Constants.UBICACION_SERVICIO_TECNICO)) {
+				if (guia.getOrigen().getTipo().equals(Constants.UBICACION_SUCURSAL)) {
+					if (guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
 						b1.setFechaSalida(guia.getFechaEmision());
-						b1.getEstado()
-								.setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_EN_SERVICIO_TECNICO_LOCAL);
+						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_EN_SERVICIO_TECNICO_LOCAL);
 						bitacoraDAO.save(b1);
 
 						Bitacora b2 = new Bitacora();
 						b2.setEstado(new Estado());
 						b2.setOrdenTrabajo(ordenTrabajo);
 						b2.setFechaEntrada(guia.getFechaEmision());
-						b2.getEstado()
-								.setId(Constants.BITACORA_EN_SERVICIO_TECNICO_LOCAL_DESPUES_ENTREGA_A_CAMION_HACIA_SUCURSAL);
+						b2.getEstado().setId(
+								Constants.BITACORA_EN_SERVICIO_TECNICO_LOCAL_DESPUES_ENTREGA_A_CAMION_HACIA_SUCURSAL);
 						b2.setUbicacion(guia.getDestino());
 						bitacoraDAO.save(b2);
-					} else if (guia.getDestino().getTipo()
-							.equals(Constants.UBICACION_BODEGA_REGIONAL)) {
+					} else if (guia.getDestino().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
-						b1.getEstado()
-								.setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_A_BODEGA_REGIONAL);
+						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_A_BODEGA_REGIONAL);
 						bitacoraDAO.save(b1);
-					} else if (guia.getDestino().getTipo()
-							.equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
+					} else if (guia.getDestino().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
 						if (bitacora.getEstado().getId() > 70000000) {
 							Bitacora b1 = new Bitacora();
 							b1.setEstado(new Estado());
 							b1.setOrdenTrabajo(ordenTrabajo);
 							b1.setFechaEntrada(guia.getFechaEmision());
-							b1.setEstado(estadoDAO
-									.getNextEstadoByIdEstado(bitacora
-											.getEstado().getId()));
+							b1.setEstado(estadoDAO.getNextEstadoByIdEstado(bitacora.getEstado().getId()));
 							bitacoraDAO.save(b1);
 						} else {
 							Bitacora b1 = new Bitacora();
 							b1.setEstado(new Estado());
 							b1.setOrdenTrabajo(ordenTrabajo);
 							b1.setFechaEntrada(guia.getFechaEmision());
-							b1.getEstado()
-									.setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_A_CD);
+							b1.getEstado().setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_A_CD);
 							bitacoraDAO.save(b1);
 						}
 					}
-				} else if (guia.getOrigen().getTipo()
-						.equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
-						&& guia.getOrigen()
-								.getId()
-								.equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA)) {
-					if (guia.getDestino().getTipo()
-							.equals(Constants.UBICACION_SERVICIO_TECNICO)) {
+				} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
+						&& guia.getOrigen().getId().equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA)) {
+					if (guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
 						if (guia.getEstado().getId() > 50006000) {
 							Bitacora b1 = new Bitacora();
 							b1.setEstado(new Estado());
 							b1.setOrdenTrabajo(ordenTrabajo);
 							b1.setFechaEntrada(guia.getFechaEmision());
-							b1.getEstado()
-									.setId(Constants.BITACORA_EN_SERVICIO_TECNICO_DEPUES_AL_CD);
+							b1.getEstado().setId(Constants.BITACORA_EN_SERVICIO_TECNICO_DEPUES_AL_CD);
 							b1.setUbicacion(guia.getDestino());
 
 							bitacoraDAO.save(b1);
@@ -1416,48 +2257,37 @@ public class SucursalService {
 							b1.setOrdenTrabajo(ordenTrabajo);
 							b1.setFechaEntrada(guia.getFechaEmision());
 							b1.setFechaSalida(guia.getFechaEmision());
-							b1.getEstado()
-									.setId(Constants.BITACORA_EN_CAMION_ENTREGA_A_SERVICIO_TECNICO_2);
+							b1.getEstado().setId(Constants.BITACORA_EN_CAMION_ENTREGA_A_SERVICIO_TECNICO_2);
 							bitacoraDAO.save(b1);
 
 							Bitacora b2 = new Bitacora();
 							b2.setEstado(new Estado());
 							b2.setOrdenTrabajo(ordenTrabajo);
 							b2.setFechaEntrada(guia.getFechaEmision());
-							b2.getEstado()
-									.setId(Constants.BITACORA_EN_SERVICIO_TECNICO_DEPUES_ENTREGA_A_CAMION_AL_CD);
+							b2.getEstado().setId(Constants.BITACORA_EN_SERVICIO_TECNICO_DEPUES_ENTREGA_A_CAMION_AL_CD);
 							b2.setUbicacion(guia.getDestino());
 							bitacoraDAO.save(b2);
 						}
-					} else if (guia.getDestino().getTipo()
-							.equals(Constants.UBICACION_SUCURSAL)) {
+					} else if (guia.getDestino().getTipo().equals(Constants.UBICACION_SUCURSAL)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
-						if (ordenTrabajo
-								.getEstado()
+						if (ordenTrabajo.getEstado()
 								.equals(Constants.OT_ESTADO_CON_RECEPCION_RECHAZADA_EN_CENTRO_DE_DISTRIBUCION)) {
-							b1.getEstado()
-									.setId(Constants.BITACORA_EN_CAMION_DESPUES_DEVUELVE_A_SUCURSAL);
+							b1.getEstado().setId(Constants.BITACORA_EN_CAMION_DESPUES_DEVUELVE_A_SUCURSAL);
 						} else {
-							b1.getEstado()
-									.setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_EN_SUCURSAL);
+							b1.getEstado().setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_EN_SUCURSAL);
 						}
 						bitacoraDAO.save(b1);
-					} else if (guia.getDestino().getTipo()
-							.equals(Constants.UBICACION_BODEGA_REGIONAL)) {
+					} else if (guia.getDestino().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
-						b1.getEstado().setId(
-								Constants.BITACORA_EN_CAMION_A_BODEGA_REGIONAL);
+						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_A_BODEGA_REGIONAL);
 						bitacoraDAO.save(b1);
-					} else if (guia
-							.getDestino()
-							.getId()
-							.equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF)) {
+					} else if (guia.getDestino().getId().equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
@@ -1465,14 +2295,10 @@ public class SucursalService {
 						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_A_FF);
 						bitacoraDAO.save(b1);
 					}
-				} else if (guia.getOrigen().getTipo()
-						.equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
-						&& guia.getOrigen()
-								.getId()
-								.equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF)) {
+				} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
+						&& guia.getOrigen().getId().equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF)) {
 					if (guia.getDestino().getTipo() != null
-							&& guia.getDestino().getTipo()
-									.equals(Constants.UBICACION_TRANSPORTE)) {
+							&& guia.getDestino().getTipo().equals(Constants.UBICACION_TRANSPORTE)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
@@ -1480,89 +2306,71 @@ public class SucursalService {
 						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_A_FF);
 						bitacoraDAO.save(b1);
 					} else if (guia.getDestino().getTipo() != null
-							&& guia.getDestino().getTipo()
-									.equals(Constants.UBICACION_CASA_REMATE)) {
+							&& guia.getDestino().getTipo().equals(Constants.UBICACION_CASA_REMATE)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
-						b1.getEstado().setId(
-								Constants.BITACORA_EN_CAMION_A_CASA_REMATE);
+						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_A_CASA_REMATE);
 						bitacoraDAO.save(b1);
 					} else if (guia.getDestino().getTipo() != null
-							&& guia.getDestino().getTipo()
-									.equals(Constants.UBICACION_LIQUIDADORA)) {
+							&& guia.getDestino().getTipo().equals(Constants.UBICACION_LIQUIDADORA)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
-						b1.getEstado().setId(
-								Constants.BITACORA_EN_CAMION_A_LIQUIDADORA);
+						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_A_LIQUIDADORA);
 						bitacoraDAO.save(b1);
 					} else if (guia.getDestino().getTipo() != null
-							&& guia.getDestino()
-									.getTipo()
-									.equals(Constants.UBICACION_SERVICIO_TECNICO)) {
+							&& guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
-						b1.getEstado()
-								.setId(Constants.BITACORA_EN_CAMION_A_SERVICIO_TECNICO);
+						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_A_SERVICIO_TECNICO);
 						bitacoraDAO.save(b1);
 					} else if (guia.getDestino().getTipo() != null
-							&& guia.getDestino()
-									.getTipo()
-									.equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
-							&& guia.getDestino().getId()
-									.equals(Constants.BODEGA_10000)) {
+							&& guia.getDestino().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)
+							&& guia.getDestino().getId().equals(Constants.BODEGA_10000)) {
 
 					} else {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
-						b1.getEstado().setId(
-								Constants.BITACORA_EN_CAMION_A_PROVEEDOR);
+						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_A_PROVEEDOR);
 						bitacoraDAO.save(b1);
 					}
-				} else if (guia.getOrigen().getTipo()
-						.equals(Constants.UBICACION_BODEGA_REGIONAL)) {
-					if (guia.getDestino().getTipo()
-							.equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
+				} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)) {
+					if (guia.getDestino().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
-						b1.getEstado()
-								.setId(Constants.BITACORA_EN_CAMION_DESPUES_SE_ENTREGA_EN_CENTRO_DE_DISTRIBUCION);
+						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_DESPUES_SE_ENTREGA_EN_CENTRO_DE_DISTRIBUCION);
 						bitacoraDAO.save(b1);
-					} else if (guia.getDestino().getTipo()
-							.equals(Constants.UBICACION_SUCURSAL)) {
+					} else if (guia.getDestino().getTipo().equals(Constants.UBICACION_SUCURSAL)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
-						b1.getEstado()
-								.setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_EN_SUCURSAL);
+						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_EN_SUCURSAL);
 						bitacoraDAO.save(b1);
-					} else if (guia.getDestino().getTipo()
-							.equals(Constants.UBICACION_SERVICIO_TECNICO)) {
+					} else if (guia.getDestino().getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
 						b1.setFechaSalida(guia.getFechaEmision());
-						b1.getEstado()
-								.setId(Constants.BITACORA_EN_CAMION_ENTREGA_A_SERVICIO_TECNICO);
+						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_ENTREGA_A_SERVICIO_TECNICO);
 						bitacoraDAO.save(b1);
 
 						Bitacora b2 = new Bitacora();
 						b1.setEstado(new Estado());
 						b2.setOrdenTrabajo(ordenTrabajo);
 						b2.setFechaEntrada(guia.getFechaEmision());
-						b2.getEstado()
-								.setId(Constants.BITACORA_EN_SERVICIO_TECNICO_DESPUES_ENTREGA_A_CAMION_A_BODEGA_REGIONAL);
+						b2.getEstado().setId(
+								Constants.BITACORA_EN_SERVICIO_TECNICO_DESPUES_ENTREGA_A_CAMION_A_BODEGA_REGIONAL);
 						b2.setUbicacion(guia.getDestino());
 						bitacoraDAO.save(b2);
 					}
@@ -1574,8 +2382,8 @@ public class SucursalService {
 		}
 	}
 
-	public void saveBitacoraByGuiaAccesorioAndOT(Guia guia,
-			OrdenTrabajo ordenTrabajo, Bitacora bitacora) throws Exception {
+	public void saveBitacoraByGuiaAccesorioAndOT(Guia guia, OrdenTrabajo ordenTrabajo, Bitacora bitacora)
+			throws Exception {
 		try {
 			if (bitacora != null) {
 				bitacora.setOrdenTrabajo(ordenTrabajo);
@@ -1583,28 +2391,22 @@ public class SucursalService {
 				bitacoraDAO.deleteBitacoraAccesoriosMayoresByOT(bitacora);
 				bitacoraDAO.updateFechaSalidaBitacoraAccesorio(bitacora);
 
-				if (guia.getOrigen().getTipo()
-						.equals(Constants.UBICACION_SUCURSAL)) {
-					if (guia.getDestino().getTipo()
-							.equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
+				if (guia.getOrigen().getTipo().equals(Constants.UBICACION_SUCURSAL)) {
+					if (guia.getDestino().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
-						b1.getEstado()
-								.setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_A_CD);
+						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_A_CD);
 						bitacoraDAO.saveBitacoraAccesorios(b1);
 					}
-				} else if (guia.getOrigen().getTipo()
-						.equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
-					if (guia.getDestino().getTipo()
-							.equals(Constants.UBICACION_SUCURSAL)) {
+				} else if (guia.getOrigen().getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
+					if (guia.getDestino().getTipo().equals(Constants.UBICACION_SUCURSAL)) {
 						Bitacora b1 = new Bitacora();
 						b1.setEstado(new Estado());
 						b1.setOrdenTrabajo(ordenTrabajo);
 						b1.setFechaEntrada(guia.getFechaEmision());
-						b1.getEstado()
-								.setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_EN_SUCURSAL);
+						b1.getEstado().setId(Constants.BITACORA_EN_CAMION_DESPUES_ENTREGA_EN_SUCURSAL);
 						bitacoraDAO.saveBitacoraAccesorios(b1);
 					}
 				}
@@ -1615,8 +2417,7 @@ public class SucursalService {
 		}
 	}
 
-	public void saveBitacoraByGuiaAndOT(Guia guia, OrdenTrabajo ordenTrabajo)
-			throws Exception {
+	public void saveBitacoraByGuiaAndOT(Guia guia, OrdenTrabajo ordenTrabajo) throws Exception {
 		try {
 			guia = guiaDAO.get(guia.getId());
 			guia.setDestino(ubicacionDAO.get(guia.getDestino().getId()));
@@ -1629,38 +2430,33 @@ public class SucursalService {
 		}
 	}
 
-	public void saveBitacoraByGuiaAndOTEntregaCliente(Guia guia,
-			OrdenTrabajo ordenTrabajo) throws Exception {
+	public void saveBitacoraByGuiaAndOTEntregaCliente(Guia guia, OrdenTrabajo ordenTrabajo) throws Exception {
 		try {
 			guia = guiaDAO.get(guia.getId());
 			guia.setDestino(ubicacionDAO.get(guia.getDestino().getId()));
 			guia.setOrigen(ubicacionDAO.get(guia.getOrigen().getId()));
 			ordenTrabajo = ordenTrabajoDAO.getOTById(ordenTrabajo.getId());
-			Bitacora bitacora = bitacoraDAO
-					.getUltimaBitacoraAbierta(ordenTrabajo.getId());
+			Bitacora bitacora = bitacoraDAO.getUltimaBitacoraAbierta(ordenTrabajo.getId());
 			saveBitacoraByGuiaAndOT(guia, ordenTrabajo, bitacora);
 		} catch (Exception e) {
 			throw e;
 		}
 	}
 
-	public void saveBitacoraByGuiaAccesorioAndOT(Guia guia,
-			OrdenTrabajo ordenTrabajo) throws Exception {
+	public void saveBitacoraByGuiaAccesorioAndOT(Guia guia, OrdenTrabajo ordenTrabajo) throws Exception {
 		try {
 			guia = guiaDAO.get(guia.getId());
 			guia.setDestino(ubicacionDAO.get(guia.getDestino().getId()));
 			guia.setOrigen(ubicacionDAO.get(guia.getOrigen().getId()));
 			ordenTrabajo = ordenTrabajoDAO.getOTById(ordenTrabajo.getId());
-			Bitacora bitacora = bitacoraDAO.getBitacoraAccesorioByIdGuia(guia
-					.getId());
+			Bitacora bitacora = bitacoraDAO.getBitacoraAccesorioByIdGuia(guia.getId());
 			saveBitacoraByGuiaAccesorioAndOT(guia, ordenTrabajo, bitacora);
 		} catch (Exception e) {
 			throw e;
 		}
 	}
 
-	public Integer updateUbicacionAccesorio(Accesorio accesorio)
-			throws Exception {
+	public Integer updateUbicacionAccesorio(Accesorio accesorio) throws Exception {
 		try {
 			return accesorioDAO.updateUbicacionAccesorio(accesorio);
 		} catch (Exception e) {
@@ -1669,8 +2465,7 @@ public class SucursalService {
 		}
 	}
 
-	public Integer updateUbicacionByEstado(Ubicacion ubicacion)
-			throws Exception {
+	public Integer updateUbicacionByEstado(Ubicacion ubicacion) throws Exception {
 		try {
 			return ubicacionDAO.updateVigenciaUbicacion(ubicacion);
 		} catch (Exception e) {
@@ -1689,21 +2484,17 @@ public class SucursalService {
 	}
 
 	/* Region Contrato */
-	public ServicioTecnico getOTContratoByGuia(FilterOT filterOT,
-			Ubicacion ubicacion) throws Exception {
+	public ServicioTecnico getOTContratoByGuia(FilterOT filterOT, Ubicacion ubicacion) throws Exception {
 		try {
 			filterOT.setIdOrigen(ubicacion.getId());
 
 			if (filterOT.getNumeroGuia() != null) {
-				List<Guia> guias = guiaDAO
-						.getByNumero(filterOT.getNumeroGuia());
+				List<Guia> guias = guiaDAO.getByNumero(filterOT.getNumeroGuia());
 				if (guias == null || guias.size() == 0) {
-					throw new SSTException(
-							"No hay guías con los parametros ingresados");
+					throw new SSTException("No hay guï¿½as con los parametros ingresados");
 				}
 				if (guias.size() > 1) {
-					throw new SSTException(
-							"Existe mas de una guía que cumple las condiciones");
+					throw new SSTException("Existe mas de una guï¿½a que cumple las condiciones");
 				}
 
 				filterOT.setIdDestino(guias.get(0).getDestino().getId());
@@ -1711,17 +2502,15 @@ public class SucursalService {
 
 			OrdenTrabajo orden = this.getOTByFilter(filterOT);
 
-			if (!orden.getEstado().getId()
-					.equals(Constants.OT_ESTADO_REPARACION_ESPERA_CONTRATO)) {
-				throw new SSTException("La orden de trabajo tiene el estado : "
-						+ orden.getEstado().getDescripcion());
+			if (!orden.getEstado().getId().equals(Constants.OT_ESTADO_REPARACION_ESPERA_CONTRATO)) {
+				throw new SSTException("La orden de trabajo tiene el estado : " + orden.getEstado().getDescripcion());
 			}
 
 			Guia guia = guiaDAO.getGuiaByIdOT(orden.getId());
 			guia = guiaDAO.get(guia.getId());
 
 			if (!guia.getOrigen().getId().equals(ubicacion.getId())) {
-				throw new SSTException("Esta guía pertenece a otra ubicación");
+				throw new SSTException("Esta guï¿½a pertenece a otra ubicaciï¿½n");
 			}
 
 			return ejecutivaService.getServicioTecnicoByOT(orden.getId());
@@ -1761,79 +2550,66 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo terminarOrdenTrabajo(Cliente cliente, OrdenTrabajo oT,
-			Ubicacion origen) throws Exception {
+	public OrdenTrabajo terminarOrdenTrabajo(Cliente cliente, OrdenTrabajo oT, Ubicacion origen, String giroEmpresa) throws Exception {
 		try {
 			this.saveCliente(cliente);
 
-			if (oT.getEstado()
-					.getId()
-					.equals(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE)
-					&& oT.getTipo().getCodigo()
-							.equals(Constants.TIPO_OT_CAMBIO_AUTOMATICO)) {
+			if (oT.getEstado().getId().equals(
+					Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE)
+					&& oT.getTipo().getCodigo().equals(Constants.TIPO_OT_CAMBIO_AUTOMATICO)) {
 				oT.setCerradaCliente(true);
 			}
 
-			if (!oT.getTipo().getCodigo()
-					.equals(Constants.TIPO_OT_GARANTIA_BIG_TICKET)
-					&& oT.getEstado()
-							.getId()
-							.equals(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE)) {
+			if (!oT.getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_BIG_TICKET) && oT.getEstado().getId()
+					.equals(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE)) {
 				Guia guia = new Guia();
-				if (((oT.getTipo().getCodigo()
-						.equals(Constants.TIPO_OT_GARANTIA_PROVEEDOR) || oT
-						.getTipo().getCodigo()
-						.equals(Constants.TIPO_OT_GARANTIA_PROVEEDOR_CF))
-						&& oT.getTipoCambio() != null && oT.getTipoCambio()
-						.getCodigo()
-						.equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION))
-						|| (!(oT.getTipoCambio() != null && (oT
-								.getTipoCambio()
-								.getCodigo()
-								.equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION)
-								|| (oT.getTipoCambio().getCodigo()
-										.equals(Constants.CAMBIO_JEFE_TIENDA) && oT
-										.getTipoCambioJT()
-										.getCodigo()
-										.equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION))
-								|| oT.getTipoCambio()
-										.getCodigo()
-										.equals(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO) || oT
-								.getTipoCambio()
-								.getCodigo()
-								.equals(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_CARTA))))) {
+				if (((oT.getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_PROVEEDOR)
+						|| oT.getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_PROVEEDOR_CF))
+						&& oT.getTipoCambio() != null
+						&& oT.getTipoCambio().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION))
+						|| (!(oT.getTipoCambio() != null
+								&& (oT.getTipoCambio().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION)
+										|| (oT.getTipoCambio().getCodigo().equals(Constants.CAMBIO_JEFE_TIENDA)
+												&& oT.getTipoCambioJT().getCodigo()
+														.equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION))
+										|| oT.getTipoCambio().getCodigo()
+												.equals(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO)
+										|| oT.getTipoCambio().getCodigo()
+												.equals(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_CARTA))))) {
 
-					OrdenTrabajo ordenTrabajo = ordenTrabajoDAO.getOTById(oT
-							.getId());
+					OrdenTrabajo ordenTrabajo = ordenTrabajoDAO.getOTById(oT.getId());
 					guia.setOrdenTrabajo(oT);
 					guia.setOrigen(origen);
 					// guia.setDestino(ubicacionDAO.get(ordenTrabajo.getIdDestino()));
 
-					if (oT.getsTecnico() != null
-							&& oT.getsTecnico().getId() != null
-							&& oT.getsTecnico().getId() > 0) {
-						guia.setDestino(ubicacionDAO.get(oT.getsTecnico()
-								.getId().longValue()));
+					if (oT.getsTecnico() != null && oT.getsTecnico().getId() != null && oT.getsTecnico().getId() > 0) {
+						guia.setDestino(ubicacionDAO.get(oT.getsTecnico().getId().longValue()));
 					} else {
 						if (ordenTrabajo.getIdDestino() == null) {
-							ordenTrabajo
-									.setIdDestino(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA);
+							ordenTrabajo.setIdDestino(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA);
 						}
-						guia.setDestino(ubicacionDAO.get(ordenTrabajo
-								.getIdDestino()));
+						guia.setDestino(ubicacionDAO.get(ordenTrabajo.getIdDestino()));
 					}
 					guia.setEntregaCliente(false);
 					guia.setEstado(new Estado());
 					guia.getEstado().setId(Constants.GUIA_ESTADO_POR_EMITIR);
 					guia.setVigente(true);
 					guia.setTipoGuia(Constants.GUIA_TIPO_UNITARIA);
+					
 					guiaDAO.save(guia);
-
-					List<Accesorio> accesoriosOT = accesorioDAO
-							.listAccesoriosByOT(oT.getId());
+					
+			        Integer lastCorr=guiaDAO.getLastCorrelativo();
+					
+					guia.setCorr(lastCorr+1);
+					
+					guiaDAO.updateCorrelativo(guia);
+					
+					 
+					
+					
+					List<Accesorio> accesoriosOT = accesorioDAO.listAccesoriosByOT(oT.getId());
 					for (Accesorio accesorio : accesoriosOT) {
-						if (accesorio.getUbicacion().getTipo()
-								.equals(origen.getTipo())) {
+						if (accesorio.getUbicacion().getTipo().equals(origen.getTipo())) {
 							accesorio.setGuia(guia);
 							accesorioDAO.updateIdGuiaFromAccesorio(accesorio);
 						}
@@ -1845,16 +2621,14 @@ public class SucursalService {
 				bitacora.setOrdenTrabajo(oT);
 				bitacora.setUbicacion(origen);
 				bitacoraDAO.updateAsignaBitacoraAGuia(bitacora);
-				oT.getEstado()
-						.setId(Constants.OT_ESTADO_EN_SUCURSAL_A_LA_ESPERA_DE_SER_ENVIADA);
+				oT.getEstado().setId(Constants.OT_ESTADO_EN_SUCURSAL_A_LA_ESPERA_DE_SER_ENVIADA);
 			}
 
-			if (oT.getTipo().getCodigo()
-					.equals(Constants.TIPO_OT_GARANTIA_BIG_TICKET)) {
-				oT.getEstado()
-						.setId(Constants.OT_ESTADO_BIG_TICKET_A_LA_ESPERA_DE_ELEGIR_SERVICIO_TECNICO);
+			if (oT.getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_BIG_TICKET)) {
+				oT.getEstado().setId(Constants.OT_ESTADO_BIG_TICKET_A_LA_ESPERA_DE_ELEGIR_SERVICIO_TECNICO);
 			}
-
+           
+			oT.setGiroEmpresa(giroEmpresa);
 			ordenTrabajoDAO.updateOTbyOT(oT);
 			return ordenTrabajoDAO.getOTById(oT.getId());
 
@@ -1864,21 +2638,18 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo updateOTFallaReiterada(OrdenTrabajo oT)
-			throws Exception {
+	public OrdenTrabajo updateOTFallaReiterada(OrdenTrabajo oT) throws Exception {
 		try {
 			oT.setCambioAutorizado(true);
 			oT.setTipo(new TipoOT());
 			oT.setTipoCambio(new TipoCambio());
 			oT.getTipo().setCodigo(Constants.TIPO_OT_CAMBIO_AUTOMATICO);
-			oT.getTipoCambio().setCodigo(
-					Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA);
+			oT.getTipoCambio().setCodigo(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA);
 			oT.setIdDestino(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA);
 			Bitacora bitacora = new Bitacora();
 			bitacora.setIdOT(oT.getId());
 			bitacora.setEstado(new Estado());
-			bitacora.getEstado().setId(
-					Constants.BITACORA_EN_SUCURSAL_LUEGO_A_CD);
+			bitacora.getEstado().setId(Constants.BITACORA_EN_SUCURSAL_LUEGO_A_CD);
 			bitacoraDAO.updateBitacoraByOT(bitacora);
 			ordenTrabajoDAO.updateOTbyOT(oT);
 			return oT;
@@ -1888,43 +2659,40 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo updateOTCATicketCambio(OrdenTrabajo oT,
-			Ubicacion ubicacion) throws Exception {
-	
-		try { //TODO
-			// ---------------------------------------------------------------------------
+	public OrdenTrabajo updateOTCATicketCambio(OrdenTrabajo oT, Ubicacion ubicacion) throws Exception {
+
+		try { // TODO
+				// ---------------------------------------------------------------------------
 			String flujoOrigen = "";
 			if (ordenTrabajoDAO.getEsFallaReiterada(oT.getId()) != null) {
 				flujoOrigen = ordenTrabajoDAO.getEsFallaReiterada(oT.getId());
 			}
-				// plarrain CU-05
+			// plarrain CU-05
 			if (flujoOrigen.equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA)) {
-				//System.out.println("-----> Es falla reiterada: " + flujoOrigen);
+				// System.out.println("-----> Es falla reiterada: " + flujoOrigen);
 
 				oT.setMotivoCambio(Constants.CAMBIO_PRODUCTO_FALLA_REITERADA);
-				// -----> 1° Generar xn
+				// -----> 1ï¿½ Generar xn
 				oT.setNumeroXN(oWService.createXN(oT.getId(), ubicacion));
-				// -----> 2° Tracking
+				// -----> 2ï¿½ Tracking
 				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_XN);
 				oT.setProcesadoOW(true);
 				oT.setTicketCambio(getNumeroTicketCambio());
-				// -----> 3° Aumento del NO disponible en PMM
+				// -----> 3ï¿½ Aumento del NO disponible en PMM
 				ordenTrabajoDAO.updateTicketCambio(oT);
+
 				oT.setBanderaOrigenOT(Constants.CASO_USO_5);
-				interfazService.createInterfazPMM(ubicacion, oT, 
-						Constants.DC_QUANTITY_POSITIVO);		
-				// -----> 4° Tracking
-				interfazService
-						.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_PMM);
-				// -----> 5° Generar interfaz de Orden
+				interfazService.createInterfazPMM(ubicacion, oT, Constants.DC_QUANTITY_POSITIVO);
+				// -----> 4ï¿½ Tracking
+				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_PMM);
+				// -----> 5ï¿½ Generar interfaz de Orden
 				interfazService.createInterfazOrden(ubicacion, oT);
-				// -----> 6° Tracking
-				interfazService
-						.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_ORR);
-				// -----> 7° Ot cerrada por cliente
+				// -----> 6ï¿½ Tracking
+				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_ORR);
+				// -----> 7ï¿½ Ot cerrada por cliente
 				oT.setCerradaCliente(true);
 				oT.setCerrada(false);
-				// -----> 8° Actualiza estado de la Ot
+				// -----> 8ï¿½ Actualiza estado de la Ot
 				Estado e = new Estado();
 				e.setId(Constants.OT_CERRADA_POR_USUARIO);
 				oT.setEstado(e);
@@ -1934,170 +2702,174 @@ public class SucursalService {
 				// plarrain CU-01
 			} else if (flujoOrigen.equals(Constants.CASO_USO_1)) {
 				oT.setMotivoCambio(Constants.CAMBIO_CARTA_PRODUCTO_FISICO);
-				// -----> 1° Generar xn
+				// -----> 1ï¿½ Generar xn
 				oT.setNumeroXN(oWService.createXN(oT.getId(), ubicacion));
-				// -----> 2° Tracking
+				// -----> 2ï¿½ Tracking
 				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_XN);
 				oT.setProcesadoOW(true);
 				oT.setTicketCambio(getNumeroTicketCambio());
 				ordenTrabajoDAO.updateTicketCambio(oT);
 				oT.setBanderaOrigenOT(Constants.CASO_USO_1);
-				// -----> 3° Aumento del NO disponible en PMM
-				interfazService.createInterfazPMM(ubicacion, oT,
-						Constants.DC_QUANTITY_POSITIVO);
-				// -----> 4° Tracking
-				interfazService
-						.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_PMM);
-				// -----> 5° Generar interfaz de Orden
+				// -----> 3ï¿½ Aumento del NO disponible en PMM
+				interfazService.createInterfazPMM(ubicacion, oT, Constants.DC_QUANTITY_POSITIVO);
+				// -----> 4ï¿½ Tracking
+				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_PMM);
+				// -----> 5ï¿½ Generar interfaz de Orden
 				interfazService.createInterfazOrden(ubicacion, oT);
-				// -----> 6° Tracking
-				interfazService
-						.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_ORR);
-				// -----> 7° Ot cerrada por cliente
+				// -----> 6ï¿½ Tracking
+				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_ORR);
+				// -----> 7ï¿½ Ot cerrada por cliente
 				oT.setCerradaCliente(true);
 				oT.setCerrada(false);
-				// -----> 8° Actualiza estado de la Ot
+				// -----> 8ï¿½ Actualiza estado de la Ot
 				Estado e = new Estado();
-				e.setId(Constants.OT_CERRADA_POR_USUARIO);
+				e.setId(10003000);
 				oT.setEstado(e);
+				oT.setEstadoBitacora(20016000);
 				ordenTrabajoDAO.updateCerrarOT(oT);
+
 				// ---------------------------------------------------------------------------
 				// plarrain CU-02
 			} else if (flujoOrigen.equals(Constants.CASO_USO_2)) {
 				oT.setMotivoCambio(Constants.CAMBIO_CARTA_SIN_PRODUCTO_FISICO);
-				// -----> 1° Generar xn
+				// -----> 1ï¿½ Generar xn
 				oT.setNumeroXN(oWService.createXN(oT.getId(), ubicacion));
-				// -----> 2° Tracking
+				// -----> 2ï¿½ Tracking
 				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_XN);
 				oT.setProcesadoOW(true);
 				oT.setTicketCambio(getNumeroTicketCambio());
 				ordenTrabajoDAO.updateTicketCambio(oT);
 				oT.setBanderaOrigenOT(Constants.CASO_USO_2);
-				// -----> 3° Aumento del NO disponible en PMM
-				interfazService.createInterfazPMM(ubicacion, oT,
-						Constants.DC_QUANTITY_POSITIVO);
-				// -----> 4° Tracking
+				// -----> 3ï¿½ Aumento del NO disponible en PMM
+				interfazService.createInterfazPMM(ubicacion, oT, Constants.DC_QUANTITY_POSITIVO);
+				// -----> 4ï¿½ Tracking
 				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_PMM);
-				// -----> 5° Ot cerrada por cliente
+				// -----> 5ï¿½ Ot cerrada por cliente
 				oT.setCerradaCliente(true);
 				oT.setCerrada(false);
-				// -----> 6° Actualiza estado de la Ot
+				// -----> 6ï¿½ Actualiza estado de la Ot
 				Estado e = new Estado();
-				e.setId(Constants.OT_CERRADA_POR_USUARIO);
+				e.setId(10003000);
+				oT.setEstadoBitacora(20016000);
+				//e.setId(Constants.OT_CERRADA_POR_USUARIO);
 				oT.setEstado(e);
 				ordenTrabajoDAO.updateCerrarOT(oT);
+
 				// ---------------------------------------------------------------------------
 				// plarrain CU-03
 			} else if (flujoOrigen.equals(Constants.CASO_USO_3)) {
 				oT.setMotivoCambio(Constants.CAMBIO_CON_PRODUCTO_FISICO);
-				// -----> 1° Generar xn
+				// -----> 1ï¿½ Generar xn
 				oT.setNumeroXN(oWService.createXN(oT.getId(), ubicacion));
-				// -----> 2° Tracking
+				// -----> 2ï¿½ Tracking
 				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_XN);
 				oT.setProcesadoOW(true);
 				oT.setTicketCambio(getNumeroTicketCambio());
 				ordenTrabajoDAO.updateTicketCambio(oT);
-				// -----> 3° Ot cerrada por cliente
+				// -----> 3ï¿½ Ot cerrada por cliente
 				oT.setCerradaCliente(true);
 				oT.setCerrada(false);
-				// -----> 4° Actualiza estado de la Ot
+				// -----> 4ï¿½ Actualiza estado de la Ot
 				Estado e = new Estado();
 				e.setId(Constants.OT_CERRADA_POR_USUARIO);
 				oT.setEstado(e);
 				ordenTrabajoDAO.updateCerrarOT(oT);
+
 				// ---------------------------------------------------------------------------
 				// plarrain CU-04
-			} else if (flujoOrigen.equals(Constants.CASO_USO_4)) {				
+			} else if (flujoOrigen.equals(Constants.CASO_USO_4)) {
 				oT.setMotivoCambio(Constants.CAMBIO_SIN_PRODUCTO_FISICO);
-				// -----> 1° Generar xn
+				// -----> 1ï¿½ Generar xn
 				oT.setNumeroXN(oWService.createXN(oT.getId(), ubicacion));
-				// -----> 2° Tracking
-				interfazService.saveOtTracking(oT,
-				Constants.ID_OT_INTERFAZ_XN);
+				// -----> 2ï¿½ Tracking
+				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_XN);
 				oT.setProcesadoOW(true);
 				oT.setTicketCambio(getNumeroTicketCambio());
 				ordenTrabajoDAO.updateTicketCambio(oT);
-				// -----> 3° Ot cerrada por cliente
+				// -----> 3ï¿½ Ot cerrada por cliente
 				oT.setCerradaCliente(true);
 				oT.setCerrada(false);
-				// -----> 4° Actualiza estado de la Ot
+				// -----> 4ï¿½ Actualiza estado de la Ot
 				Estado e = new Estado();
 				e.setId(Constants.OT_CERRADA_POR_USUARIO);
 				oT.setEstado(e);
 				ordenTrabajoDAO.updateCerrarOT(oT);
-				 // ---------------------------------------------------------------------------
-				 // plarrain CU-08
-			}  else if (flujoOrigen.equals(Constants.CASO_USO_8)) {
+
+				// ---------------------------------------------------------------------------
+				// plarrain CU-08
+			} else if (flujoOrigen.equals(Constants.CASO_USO_8)) {
 				oT.setMotivoCambio(Constants.CAMBIO_PRODUCTO_PROVEEDOR);
-				// -----> 1° Generar xn
+				// -----> 1ï¿½ Generar xn
 				oT.setNumeroXN(oWService.createXN(oT.getId(), ubicacion));
-				// -----> 2° Tracking
+				// -----> 2ï¿½ Tracking
 				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_XN);
 				oT.setProcesadoOW(true);
 				oT.setTicketCambio(getNumeroTicketCambio());
 				ordenTrabajoDAO.updateTicketCambio(oT);
 				oT.setBanderaOrigenOT(Constants.CASO_USO_8);
-				// -----> 3° Aumento del NO disponible en PMM
+				// -----> 3ï¿½ Aumento del NO disponible en PMM
 				interfazService.createInterfazPMM(ubicacion, oT, Constants.DC_QUANTITY_POSITIVO);
-				// -----> 4° Tracking
+				// -----> 4ï¿½ Tracking
 				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_PMM);
-				// -----> 5° Generar interfaz de Orden
+				// -----> 5ï¿½ Generar interfaz de Orden
 				interfazService.createInterfazOrden(ubicacion, oT);
-				// -----> 6° Tracking
+				// -----> 6ï¿½ Tracking
 				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_ORR);
-				// -----> 7° Ot cerrada por cliente
+				// -----> 7ï¿½ Ot cerrada por cliente
 				oT.setCerradaCliente(true);
 				oT.setCerrada(false);
-				// -----> 8° Actualiza estado de la Ot
+				// -----> 8ï¿½ Actualiza estado de la Ot
 				Estado e = new Estado();
 				e.setId(Constants.OT_CERRADA_POR_USUARIO);
 				oT.setEstado(e);
 				ordenTrabajoDAO.updateCerrarOT(oT);
-			}   else if (flujoOrigen.equals(Constants.CASO_USO_7)) {
+
+			} else if (flujoOrigen.equals(Constants.CASO_USO_7)) {
 				oT.setMotivoCambio(Constants.CAMBIO_PRODUCTO_FALLA_VENTA_MENOR_24_HORAS);
-				// -----> 1° Generar xn
+				// -----> 1ï¿½ Generar xn
 				oT.setNumeroXN(oWService.createXN(oT.getId(), ubicacion));
-				// -----> 2° Tracking
+				// -----> 2ï¿½ Tracking
 				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_XN);
 				oT.setProcesadoOW(true);
 				oT.setTicketCambio(getNumeroTicketCambio());
 				ordenTrabajoDAO.updateTicketCambio(oT);
 				oT.setBanderaOrigenOT(Constants.CASO_USO_8);
-				// -----> 3° Aumento del NO disponible en PMM
+				// -----> 3ï¿½ Aumento del NO disponible en PMM
 				interfazService.createInterfazPMM(ubicacion, oT, Constants.DC_QUANTITY_POSITIVO);
-				// -----> 4° Tracking
+				// -----> 4ï¿½ Tracking
 				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_PMM);
-				// -----> 5° Generar interfaz de Orden
+				// -----> 5ï¿½ Generar interfaz de Orden
 				interfazService.createInterfazOrden(ubicacion, oT);
-				// -----> 6° Tracking
+				// -----> 6ï¿½ Tracking
 				interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_ORR);
-				// -----> 7° Ot cerrada por cliente
+				// -----> 7ï¿½ Ot cerrada por cliente
 				oT.setCerradaCliente(true);
 				oT.setCerrada(false);
-				// -----> 8° Actualiza estado de la Ot
+				// -----> 8ï¿½ Actualiza estado de la Ot
 				Estado e = new Estado();
 				e.setId(Constants.OT_CERRADA_POR_USUARIO);
 				oT.setEstado(e);
 				ordenTrabajoDAO.updateCerrarOT(oT);
+
 			} else {
 
 				if (Constants.TIPO_OT_GARANTIA_MASTER.equals(oT.getTipo().getCodigo())) {
 					return oT;
 				}
 
-				if(Constants.TIPO_OT_CAMBIO_AUTOMATICO.equals(oT.getTipo().getCodigo())){
+				if (Constants.TIPO_OT_CAMBIO_AUTOMATICO.equals(oT.getTipo().getCodigo())) {
 					oT.setBanderaOrigenOT(Constants.CASO_USO_6);
 				}
-				
-				/*if(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO.equals(oT.getTipoCambio().getCodigo())){
-					oT.setBanderaOrigenOT(Constants.CASO_USO_8);
-				}
-				
-				if(Constants.TIPO_OT_CAMBIO_MENOR_24_HRS.equals(oT.getTipoCambio().getCodigo())){
-					oT.setBanderaOrigenOT(Constants.CASO_USO_7);
-				}*/
-				
-				if (Constants.TIPO_OT_CAMBIO_AUTOMATICO.equals(oT.getTipo().getCodigo()) || Constants.TIPO_OT_GARANTIA_PROVEEDOR.equals(oT.getTipo().getCodigo())) {
+
+				/*
+				 * if(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO.equals(oT.getTipoCambio().
+				 * getCodigo())){ oT.setBanderaOrigenOT(Constants.CASO_USO_8); }
+				 * 
+				 * if(Constants.TIPO_OT_CAMBIO_MENOR_24_HRS.equals(oT.getTipoCambio().getCodigo(
+				 * ))){ oT.setBanderaOrigenOT(Constants.CASO_USO_7); }
+				 */
+				if (Constants.TIPO_OT_CAMBIO_AUTOMATICO.equals(oT.getTipo().getCodigo())
+						|| Constants.TIPO_OT_GARANTIA_PROVEEDOR.equals(oT.getTipo().getCodigo())) {
 					if (oT.getTipoCambio() != null) {
 						if (Constants.TIPO_OT_CAMBIO_MENOR_24_HRS.equals(oT.getTipoCambio().getCodigo())) {
 							oT.setMotivoCambio(Constants.CAMBIO_PRODUCTO_FALLA_VENTA_MENOR_24_HORAS);
@@ -2119,36 +2891,37 @@ public class SucursalService {
 					// if
 					// (oT.getEstado().getId().equals(Constants.OT_ESTADO_PENDIENTE_POR_ACCESORIOS_QUE_TIENE_EL_CLIENTE_CA))
 					// {
-					
-					/*if(Constants.CASO_USO_7.equalsIgnoreCase(oT.getBanderaOrigenOT()) || Constants.CASO_USO_8.equalsIgnoreCase(oT.getBanderaOrigenOT())){
-						interfazService.createInterfazOrden(ubicacion, oT);
-						interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_ORR);
-					}*/
-					
+					/*
+					 * if(Constants.CASO_USO_7.equalsIgnoreCase(oT.getBanderaOrigenOT()) ||
+					 * Constants.CASO_USO_8.equalsIgnoreCase(oT.getBanderaOrigenOT())){
+					 * interfazService.createInterfazOrden(ubicacion, oT);
+					 * interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_ORR); }
+					 */
 					// }
 					oT.setCerradaCliente(true);
 					oT.setCerrada(false);
 					Estado e = new Estado();
 					e.setId(10003000); // OT en sucursal, a la espera de ser
-										// enviada
+					// enviada
 					oT.setEstado(e);
 					ordenTrabajoDAO.updateCerrarOT(oT);
-					if (oT.getEstado().getId().equals(Constants.OT_ESTADO_PENDIENTE_POR_ACCESORIOS_QUE_TIENE_EL_CLIENTE_CA) || oT.getEstado().getId().equals(Constants.OT_ESTADO_PENDIENTE_POR_TICKET_DE_CAMBIO_QUE_TIENE_EL_CLIENTE_CA)) {
+					if (oT.getEstado().getId()
+							.equals(Constants.OT_ESTADO_PENDIENTE_POR_ACCESORIOS_QUE_TIENE_EL_CLIENTE_CA)
+							|| oT.getEstado().getId().equals(
+									Constants.OT_ESTADO_PENDIENTE_POR_TICKET_DE_CAMBIO_QUE_TIENE_EL_CLIENTE_CA)) {
 						oT.getEstado().setId(Constants.OT_CERRADA_POR_USUARIO);
 						ordenTrabajoDAO.updateEstadoOT(oT);
 					}
-				}// fin de condicion if
+				} // fin de condicion if
 
-				if (Constants.TIPO_OT_GARANTIA_PROVEEDOR_CF.equals(oT.getTipo()
-						.getCodigo())) {
+				if (Constants.TIPO_OT_GARANTIA_PROVEEDOR_CF.equals(oT.getTipo().getCodigo())) {
 					oT.setMotivoCambio(Constants.CAMBIO_PRODUCTO_PROVEEDOR);
 					oT.setBanderaOrigenOT(Constants.CASO_USO_10);
 					ordenTrabajoDAO.updateOTBTNOrigen(oT);
-					// 1° Generar interfaz XN
+					// 1ï¿½ Generar interfaz XN
 					oT.setNumeroXN(oWService.createXN(oT.getId(), ubicacion));
-					// 2° Insertara Tracking
-					interfazService.saveOtTracking(oT,
-							Constants.ID_OT_INTERFAZ_XN);
+					// 2ï¿½ Insertara Tracking
+					interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_XN);
 					oT.setProcesadoOW(true);
 					oT.setTicketCambio(getNumeroTicketCambio());
 					ordenTrabajoDAO.updateTicketCambio(oT);
@@ -2192,20 +2965,16 @@ public class SucursalService {
 		}
 	}
 
-	public ListRange listSTecnicoFromProductoByUbicacion(
-			FilterServicioTecnico filterServicioTecnico,
+	public ListRange listSTecnicoFromProductoByUbicacion(FilterServicioTecnico filterServicioTecnico,
 			GridControl gridControl, Ubicacion ubicacion) throws Exception {
 		try {
 			filterServicioTecnico.setIdOrigen(ubicacion.getId());
 			filterServicioTecnico.setOrderBy(gridControl.getOrderBy());
 			filterServicioTecnico.setSortOrder(gridControl.getSortOrder());
 			ListRange listRange = new ListRange();
-			listRange.setRows(servicioTecnicoDAO
-					.listSTecnicoFromProductoByUbicacion(filterServicioTecnico,
-							gridControl));
-			listRange
-					.setTotal(servicioTecnicoDAO
-							.getTotalSTecnicoFromProductoByUbicacion(filterServicioTecnico));
+			listRange.setRows(
+					servicioTecnicoDAO.listSTecnicoFromProductoByUbicacion(filterServicioTecnico, gridControl));
+			listRange.setTotal(servicioTecnicoDAO.getTotalSTecnicoFromProductoByUbicacion(filterServicioTecnico));
 			return listRange;
 		} catch (Exception e) {
 			log.error(e, e);
@@ -2231,8 +3000,7 @@ public class SucursalService {
 		}
 	}
 
-	public List<Sucursal> listSucursalesByComuna(Long idComuna)
-			throws Exception {
+	public List<Sucursal> listSucursalesByComuna(Long idComuna) throws Exception {
 		try {
 			return sucursalDAO.listSucursalesByComuna(idComuna);
 		} catch (Exception e) {
@@ -2250,8 +3018,7 @@ public class SucursalService {
 		}
 	}
 
-	public void saveSTecnicoOT(OrdenTrabajo ot, Usuario usuario)
-			throws Exception {
+	public void saveSTecnicoOT(OrdenTrabajo ot, Usuario usuario) throws Exception {
 		try {
 			OrdenTrabajo ordenTrabajo = ordenTrabajoDAO.getOTById(ot.getId());
 			servicioTecnicoDAO.updateSTecnicoOT(ot);
@@ -2263,35 +3030,28 @@ public class SucursalService {
 			gestion.setGestion(" ingresa el contrato y/o diagnostico del servicio tecnico");
 			gestionesDAO.saveGestion(gestion);
 
-			if (ot.getCalificaFR() != null
-					&& !ot.getCalificaFR().equals(ordenTrabajo.getCalificaFR())) {
+			if (ot.getCalificaFR() != null && !ot.getCalificaFR().equals(ordenTrabajo.getCalificaFR())) {
 				Gestion gestionCalificaFR = new Gestion();
 				gestionCalificaFR.setOt(ot);
 				gestionCalificaFR.setUsuario(usuario);
 				if (ot.getCalificaFR()) {
-					gestionCalificaFR
-							.setGestion(" producto califica para fallas reiteradas");
+					gestionCalificaFR.setGestion(" producto califica para fallas reiteradas");
 				} else {
-					gestionCalificaFR
-							.setGestion(" producto NO califica para fallas reiteradas");
+					gestionCalificaFR.setGestion(" producto NO califica para fallas reiteradas");
 				}
 				gestionesDAO.saveGestion(gestion);
 			}
 
-			if (ordenTrabajo.getEstado().getId()
-					.equals(Constants.OT_ESTADO_REPARACION_ESPERA_CONTRATO)) {
+			if (ordenTrabajo.getEstado().getId().equals(Constants.OT_ESTADO_REPARACION_ESPERA_CONTRATO)) {
 				Guia guia = guiaDAO.getGuiaByIdOT(ot.getId());
-				guia.setEstado(estadoDAO
-						.getEstadoById(Constants.GUIA_ESTADO_EMITIDA_RECIBIDA_NO_REEMISION));
+				guia.setEstado(estadoDAO.getEstadoById(Constants.GUIA_ESTADO_EMITIDA_RECIBIDA_NO_REEMISION));
 				guia.setVigente(true);
 				guiaDAO.updateEstado(guia);
 
 				if (ot.getContratoEmitido()) {
-					ot.setEstado(estadoDAO
-							.getEstadoById(Constants.OT_EN_ST_CON_CONTRATO));
+					ot.setEstado(estadoDAO.getEstadoById(Constants.OT_EN_ST_CON_CONTRATO));
 				} else {
-					ot.setEstado(estadoDAO
-							.getEstadoById(Constants.OT_EN_ST_SIN_CONTRATO));
+					ot.setEstado(estadoDAO.getEstadoById(Constants.OT_EN_ST_SIN_CONTRATO));
 				}
 				ordenTrabajoDAO.updateEstadoOT(ot);
 			}
@@ -2310,29 +3070,27 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo saveOTGM(OrdenTrabajo oT, Usuario usuario,
-			Ubicacion ubicacion) throws Exception {
+	public OrdenTrabajo saveOTGM(OrdenTrabajo oT, Usuario usuario, Ubicacion ubicacion) throws Exception {
 		try {
 			oT.setSucursal(getSucursalById(ubicacion.getId()));
 			oT.setLogistico(getLogisticoById(usuario.getId()));
 			Ubicacion destino = getUbicacionById(oT.getIdDestino());
 
 			if (oT.getEstadoBitacora() == null) {
-				if (destino.getTipo().equals(
-						Constants.UBICACION_SERVICIO_TECNICO)) {
+				if (destino.getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
 					oT.setServicioTecnico(new ServicioTecnico(destino));
-					oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_AL_SERVICIO_TECNICO_LOCAL);
-				} else if (destino.getTipo().equals(
-						Constants.UBICACION_BODEGA_REGIONAL)) {
-					oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_A_LA_BODEGA_REGIONAL);
-				} else if (destino.getTipo().equals(
-						Constants.UBICACION_CENTRO_DISTRIBUCION)) {
+					oT.setEstadoBitacora(
+							Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_AL_SERVICIO_TECNICO_LOCAL);
+				} else if (destino.getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)) {
+					oT.setEstadoBitacora(
+							Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_A_LA_BODEGA_REGIONAL);
+				} else if (destino.getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
 					oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_AL_CD);
 				}
 			}
 
-			oT.setEstado(estadoDAO
-					.getEstadoById(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE));
+			oT.setEstado(estadoDAO.getEstadoById(
+					Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE));
 			oT = saveOT(oT, usuario, ubicacion);
 			return oT;
 		} catch (SSTException e) {
@@ -2343,31 +3101,26 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo saveOTGMFromCDForCambio(OrdenTrabajo ot,
-			Ubicacion sucursal, Date fechaActual, String origenGlosa,
-			Usuario usuario) throws Exception {
+	public OrdenTrabajo saveOTGMFromCDForCambio(OrdenTrabajo ot, Ubicacion sucursal, Date fechaActual,
+			String origenGlosa, Usuario usuario) throws Exception {
 		try {
 			ot.setCliente(this.saveCliente(ot.getCliente()));
-			ot.setSucursal(sucursalDAO.getSucursalById(ot.getSucursal().getId()
-					.longValue()));
+			ot.setSucursal(sucursalDAO.getSucursalById(ot.getSucursal().getId().longValue()));
 			if (origenGlosa.equals("origenOrigen")) {
 				ot.setServicioTecnico(new ServicioTecnico());
 				ot.getServicioTecnico().setId(0);
-				ot.setEstado(estadoDAO
-						.getEstadoById(Constants.OT_ESTADO_EN_CLIENTE_ESPERA_ENTREGA_EN_SUCURSAL));
+				ot.setEstado(estadoDAO.getEstadoById(Constants.OT_ESTADO_EN_CLIENTE_ESPERA_ENTREGA_EN_SUCURSAL));
 				// ot.setEstado(estadoDAO.getEstadoById(Constants.OT_ESTADO_EN_SUCURSAL_A_LA_ESPERA_DE_SER_ENVIADA));
 				ot.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_LUEGO_A_CAMION_A_CD_PARA_REMATE);
 			} else if (origenGlosa.equals("origenDomicilio")) {
 				ot.setServicioTecnico(new ServicioTecnico());
 				ot.getServicioTecnico().setId(0);
-				ot.setEstado(estadoDAO
-						.getEstadoById(Constants.OT_ESTADO_EN_CLIENTE_A_LA_ESPERA_DE_RECUPERACION));
+				ot.setEstado(estadoDAO.getEstadoById(Constants.OT_ESTADO_EN_CLIENTE_A_LA_ESPERA_DE_RECUPERACION));
 				ot.setEstadoBitacora(Constants.BITACORA_EN_CLIENTE_A_LA_ESPERA_DE_RECUPERARLO_UNA_SUCURSAL);
 			} else if (origenGlosa.equals("origenSTecnico")) {
-				ot.setServicioTecnico(servicioTecnicoDAO.getSTecnicoById(ot
-						.getServicioTecnico().getId().longValue()));
-				ot.setEstado(estadoDAO
-						.getEstadoById(Constants.OT_ESTADO_EN_SERVICIO_TECNICO_A_LA_ESPERA_DE_SER_RECOGIDO));
+				ot.setServicioTecnico(servicioTecnicoDAO.getSTecnicoById(ot.getServicioTecnico().getId().longValue()));
+				ot.setEstado(
+						estadoDAO.getEstadoById(Constants.OT_ESTADO_EN_SERVICIO_TECNICO_A_LA_ESPERA_DE_SER_RECOGIDO));
 				ot.setEstadoBitacora(Constants.BITACORA_EN_SERVICIO_TECNICO_LUEGO_A_CAMION_A_SUCURSAL);
 			}
 			ot.setTipo(new TipoOT());
@@ -2383,14 +3136,13 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo saveOTGMFromCD(OrdenTrabajo ot, Ubicacion sucursal,
-			Date fechaActual, Usuario usuario) throws Exception {
+	public OrdenTrabajo saveOTGMFromCD(OrdenTrabajo ot, Ubicacion sucursal, Date fechaActual, Usuario usuario)
+			throws Exception {
 		try {
 			ot.setCliente(this.saveCliente(ot.getCliente()));
 			ot.setSucursal(sucursalDAO.getSucursalById(sucursal.getId()));
 			if (ot.getServicioTecnico() != null) {
-				ot.setServicioTecnico(servicioTecnicoDAO.getSTecnicoById(ot
-						.getServicioTecnico().getId().longValue()));
+				ot.setServicioTecnico(servicioTecnicoDAO.getSTecnicoById(ot.getServicioTecnico().getId().longValue()));
 			} else {
 				ot.setServicioTecnico(new ServicioTecnico());
 				ot.getServicioTecnico().setId(0);
@@ -2398,17 +3150,13 @@ public class SucursalService {
 			ot.setTipo(new TipoOT());
 			ot.getTipo().setCodigo(Constants.TIPO_OT_GARANTIA_MASTER);
 			Ubicacion ubicacionDestino = ubicacionDAO.get(ot.getIdDestino());
-			if (ubicacionDestino.getTipo().equals(
-					Constants.UBICACION_SERVICIO_TECNICO)) {
-				ot.setServicioTecnico(servicioTecnicoDAO.getSTecnicoById(ot
-						.getIdDestino()));
+			if (ubicacionDestino.getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
+				ot.setServicioTecnico(servicioTecnicoDAO.getSTecnicoById(ot.getIdDestino()));
 				ot.setEstadoBitacora(Constants.BITACORA_EN_CLIENTE_DESPUES_ENTREGA_A_SUCURSAL_20001000);
-			} else if (ubicacionDestino.getTipo().equals(
-					Constants.UBICACION_CENTRO_DISTRIBUCION)) {
+			} else if (ubicacionDestino.getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
 				ot.setEstadoBitacora(Constants.BITACORA_EN_CLIENTE_DESPUES_ENTREGA_A_SUCURSAL);
 			}
-			ot.setEstado(estadoDAO
-					.getEstadoById(Constants.OT_ESTADO_EN_CLIENTE_ESPERA_ENTREGA_EN_SUCURSAL));
+			ot.setEstado(estadoDAO.getEstadoById(Constants.OT_ESTADO_EN_CLIENTE_ESPERA_ENTREGA_EN_SUCURSAL));
 			ot = saveOT(ot, usuario, sucursal);
 			return ot;
 		} catch (Exception e) {
@@ -2417,31 +3165,28 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo saveOTGP(OrdenTrabajo oT, Usuario usuario,
-			Ubicacion ubicacion) throws Exception {
+	public OrdenTrabajo saveOTGP(OrdenTrabajo oT, Usuario usuario, Ubicacion ubicacion) throws Exception {
 		try {
 			oT.setSucursal(getSucursalById(ubicacion.getId()));
 			oT.setLogistico(getLogisticoById(usuario.getId()));
 			Ubicacion destino = getUbicacionById(oT.getIdDestino());
 
-			if (!oT.getTipo().getCodigo()
-					.equals(Constants.TIPO_OT_GARANTIA_BIG_TICKET)) {
-				if (destino.getTipo().equals(
-						Constants.UBICACION_SERVICIO_TECNICO)) {
+			if (!oT.getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_BIG_TICKET)) {
+				if (destino.getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
 					oT.setServicioTecnico(new ServicioTecnico(destino));
-					oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_AL_SERVICIO_TECNICO_LOCAL);
-				} else if (destino.getTipo().equals(
-						Constants.UBICACION_BODEGA_REGIONAL)) {
-					oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_A_LA_BODEGA_REGIONAL);
-				} else if (destino.getTipo().equals(
-						Constants.UBICACION_CENTRO_DISTRIBUCION)) {
+					oT.setEstadoBitacora(
+							Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_AL_SERVICIO_TECNICO_LOCAL);
+				} else if (destino.getTipo().equals(Constants.UBICACION_BODEGA_REGIONAL)) {
+					oT.setEstadoBitacora(
+							Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_A_LA_BODEGA_REGIONAL);
+				} else if (destino.getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
 					oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_AL_CD);
 				}
 			} else {
 				oT.setEstadoBitacora(Constants.BITACORA_OT_EN_SUCURSAL_LUEGO_EJECUTIVA_ASIGNA_SERVICIO_TECNICO);
 			}
-			oT.setEstado(estadoDAO
-					.getEstadoById(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE));
+			oT.setEstado(estadoDAO.getEstadoById(
+					Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE));
 			oT = saveOT(oT, usuario, ubicacion);
 			return oT;
 		} catch (SSTException e) {
@@ -2452,8 +3197,7 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo saveOTParaEvaluacion(OrdenTrabajo oT, Usuario usuario,
-			Ubicacion ubicacion) throws Exception {
+	public OrdenTrabajo saveOTParaEvaluacion(OrdenTrabajo oT, Usuario usuario, Ubicacion ubicacion) throws Exception {
 		try {
 			Sucursal sucursal = getSucursalById(ubicacion.getId());
 			oT.setSucursal(sucursal);
@@ -2461,9 +3205,9 @@ public class SucursalService {
 			oT.setLogistico(logisitco);
 			oT.setTipo(new TipoOT());
 			/*
-			 * Proyecto : 10021 - Mejoras Servicio Tecnico Objetivo :
-			 * Diferenciar las OT que necesitan certificacion de falla Fecha :
-			 * 07/09/2015 Autor : Richard Flores - ScriptIA
+			 * Proyecto : 10021 - Mejoras Servicio Tecnico Objetivo : Diferenciar las OT que
+			 * necesitan certificacion de falla Fecha : 07/09/2015 Autor : Richard Flores -
+			 * ScriptIA
 			 * 
 			 * INICIO******************* Original **********************
 			 * oT.getTipo().setCodigo(Constants.TIPO_OT_GARANTIA_PROVEEDOR);
@@ -2474,12 +3218,11 @@ public class SucursalService {
 			 * FIN
 			 */
 			oT.setTipoCambio(new TipoCambio());
-			oT.getTipoCambio().setCodigo(
-					Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION);
+			oT.getTipoCambio().setCodigo(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION);
 			oT.setCambioAutorizado(false);
 			oT.setEstado(new Estado());
-			oT.getEstado()
-					.setId(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
+			oT.getEstado().setId(
+					Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
 			Ubicacion destino = getUbicacionById(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA);
 
 			oT.setIdDestino(destino.getId());
@@ -2502,9 +3245,8 @@ public class SucursalService {
 			// oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_AL_CD);
 			// }
 			// }
-
-			oT.setEstadoBitacora(oT.getTipo().getCodigo()
-					.equals(Constants.TIPO_OT_GARANTIA_BIG_TICKET) ? Constants.BITACORA_OT_EN_SUCURSAL_LUEGO_EJECUTIVA_ASIGNA_SERVICIO_TECNICO
+			oT.setEstadoBitacora(oT.getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_BIG_TICKET)
+					? Constants.BITACORA_OT_EN_SUCURSAL_LUEGO_EJECUTIVA_ASIGNA_SERVICIO_TECNICO
 					: oT.getEstadoBitacora());
 			oT = saveOT(oT, usuario, ubicacion);
 
@@ -2517,21 +3259,19 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo saveOTGenerico(OrdenTrabajo oT, String tipoDocumento,
-			Ubicacion sucursal, Usuario usuario) throws Exception {
+	public OrdenTrabajo saveOTGenerico(OrdenTrabajo oT, String tipoDocumento, Ubicacion sucursal, Usuario usuario)
+			throws Exception {
 		try {
 
 			// --------------------------------------------------------------------------------------------------------------
 			/*
-			 * if(oT.getNotaCredito()!=null){ updateNotaCredito(oT); }
-			 * ReglaComercial reglaComercial =
-			 * getReglaComercialVigentePorValor(oT.getProducto(), sucursal);
-			 * oT.setReglaComercial
+			 * if(oT.getNotaCredito()!=null){ updateNotaCredito(oT); } ReglaComercial
+			 * reglaComercial = getReglaComercialVigentePorValor(oT.getProducto(),
+			 * sucursal); oT.setReglaComercial
 			 * (reglaComercialDAO.getLastReglaComercialHistoricaByIdRegla
 			 * (reglaComercial.getId()));
 			 */
 			// --------------------------------------------------------------------------------------------------------------
-
 			oT.setSucursal(sucursalDAO.getSucursalById(sucursal.getId()));
 			oT.setLogistico(getLogisticoById(usuario.getId()));
 			oT.setIdDestino(0L);
@@ -2539,36 +3279,32 @@ public class SucursalService {
 
 			if (oT.getBanderaOrigenOT().equals(Constants.CASO_USO_6)
 					|| oT.getBanderaOrigenOT().equals(Constants.CASO_USO_9)) {
-				System.out.println("oT.getBanderaOrigen().toString(): "
-						+ oT.getBanderaOrigenOT().toString());
+				System.out.println("oT.getBanderaOrigen().toString(): " + oT.getBanderaOrigenOT().toString());
 				TipoCambio tipoCambio = new TipoCambio();
 				tipoCambio.setCodigo(oT.getBanderaOrigenOT());
 				oT.setTipoCambioJT(tipoCambio);
 			}
 
-			if (oT.getTipoCambioJT().getCodigo()
-					.equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION)) {
+			if (oT.getTipoCambioJT().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION)) {
 				oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_LUEGO_CAMION_PARA_FF);
-				oT.getEstado()
-						.setId(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
-			} else if (oT.getTipoCambioJT().getCodigo()
-					.equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA)) {
+				oT.getEstado().setId(
+						Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
+			} else if (oT.getTipoCambioJT().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA)) {
 				oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_LUEGO_A_CD);
-				oT.getEstado()
-						.setId(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
+				oT.getEstado().setId(
+						Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
 			} else {
 				oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_ALMACENADA_EN_SUCURSAL);
 				oT.getEstado().setId(Constants.OT_ESTADO_EN_SUCURSAL_SIN_ENVIO);
 			}
+
 			oT.setServicioTecnico(new ServicioTecnico());
 			oT.getServicioTecnico().setId(0);
 			oT.setTipoCambio(new TipoCambio());
 			oT.getTipoCambio().setCodigo(Constants.CAMBIO_JEFE_TIENDA);
 			oT.setTipo(new TipoOT());
 			oT.getTipo().setCodigo(Constants.TIPO_OT_CAMBIO_AUTOMATICO);
-			if (tipoDocumento != null
-					&& tipoDocumento
-							.equals(Constants.TIPO_DOCUMENTO_TICKET_CAMBIO)) {
+			if (tipoDocumento != null && tipoDocumento.equals(Constants.TIPO_DOCUMENTO_TICKET_CAMBIO)) {
 				oT.setTicketCambio(getNumeroTicketCambio());
 			}
 
@@ -2576,6 +3312,7 @@ public class SucursalService {
 			oT = saveOT(oT, usuario, sucursal);
 			oT.setCliente(this.saveCliente(cliente));
 			ordenTrabajoDAO.updateClienteByOT(oT);
+
 			// --------------------------------------------------------------------------------------------------------------
 			return oT;
 		} catch (SSTException e) {
@@ -2586,24 +3323,22 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo saveOTJT(OrdenTrabajo oT, String tipoDocumento,
-			Ubicacion sucursal, Usuario usuario) throws Exception {
+	public OrdenTrabajo saveOTJT(OrdenTrabajo oT, String tipoDocumento, Ubicacion sucursal, Usuario usuario)
+			throws Exception {
 		try {
 			oT.setSucursal(sucursalDAO.getSucursalById(sucursal.getId()));
 			oT.setLogistico(getLogisticoById(usuario.getId()));
 			oT.setIdDestino(0L);
 			oT.setEstado(new Estado());
 
-			if (oT.getTipoCambioJT().getCodigo()
-					.equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION)) {
+			if (oT.getTipoCambioJT().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION)) {
 				oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_LUEGO_CAMION_PARA_FF);
-				oT.getEstado()
-						.setId(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
-			} else if (oT.getTipoCambioJT().getCodigo()
-					.equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA)) {
+				oT.getEstado().setId(
+						Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
+			} else if (oT.getTipoCambioJT().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA)) {
 				oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_LUEGO_A_CD);
-				oT.getEstado()
-						.setId(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
+				oT.getEstado().setId(
+						Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
 			} else {
 				oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_ALMACENADA_EN_SUCURSAL);
 				oT.getEstado().setId(Constants.OT_ESTADO_EN_SUCURSAL_SIN_ENVIO);
@@ -2615,14 +3350,11 @@ public class SucursalService {
 			oT.getTipoCambio().setCodigo(Constants.CAMBIO_JEFE_TIENDA);
 			oT.setTipo(new TipoOT());
 			oT.getTipo().setCodigo(Constants.TIPO_OT_CAMBIO_AUTOMATICO);
-			if (tipoDocumento != null
-					&& tipoDocumento
-							.equals(Constants.TIPO_DOCUMENTO_TICKET_CAMBIO)) {
+			if (tipoDocumento != null && tipoDocumento.equals(Constants.TIPO_DOCUMENTO_TICKET_CAMBIO)) {
 				oT.setTicketCambio(getNumeroTicketCambio());
 			}
 
-			if (oT.getTipoCambioJT().getCodigo()
-					.equals(Constants.CAMBIO_AUTOMATICO_VALOR)) {
+			if (oT.getTipoCambioJT().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_VALOR)) {
 				Cliente cliente = oT.getCliente();
 				oT = saveOT(oT, usuario, sucursal);
 				oT.setCliente(this.saveCliente(cliente));
@@ -2650,8 +3382,7 @@ public class SucursalService {
 
 	}
 
-	public OrdenTrabajo saveOTCambioPorValor(OrdenTrabajo oT,
-			String tipoDocumento, Ubicacion sucursal, Usuario usuario)
+	public OrdenTrabajo saveOTCambioPorValor(OrdenTrabajo oT, String tipoDocumento, Ubicacion sucursal, Usuario usuario)
 			throws Exception {
 		try {
 			oT.setCliente(this.saveCliente(oT.getCliente()));
@@ -2673,11 +3404,8 @@ public class SucursalService {
 			if (oT.getNotaCredito() != null) {
 				updateNotaCredito(oT);
 			}
-			ReglaComercial reglaComercial = getReglaComercialVigentePorValor(
-					oT.getProducto(), sucursal);
-			oT.setReglaComercial(reglaComercialDAO
-					.getLastReglaComercialHistoricaByIdRegla(reglaComercial
-							.getId()));
+			ReglaComercial reglaComercial = getReglaComercialVigentePorValor(oT.getProducto(), sucursal);
+			oT.setReglaComercial(reglaComercialDAO.getLastReglaComercialHistoricaByIdRegla(reglaComercial.getId()));
 			return oT;
 		} catch (SSTException e) {
 			throw e;
@@ -2687,45 +3415,43 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo saveOTCambioPorVentaMenor24Hr(OrdenTrabajo oT,
-			Ubicacion sucursal, Usuario usuario) throws Exception {
+	public OrdenTrabajo saveOTCambioPorVentaMenor24Hr(OrdenTrabajo oT, Ubicacion sucursal, Usuario usuario)
+			throws Exception {
 		try {
 			oT.setTipo(new TipoOT());
 			oT.getTipo().setCodigo(Constants.TIPO_OT_CAMBIO_AUTOMATICO);
 
-			oT.setSucursal(sucursal != null ? sucursalDAO
-					.getSucursalById(sucursal.getId()) : new Sucursal());
-			oT.setLogistico(usuario != null ? getLogisticoById(usuario.getId())
-					: new Logistico());
+			oT.setSucursal(sucursal != null ? sucursalDAO.getSucursalById(sucursal.getId()) : new Sucursal());
+			oT.setLogistico(usuario != null ? getLogisticoById(usuario.getId()) : new Logistico());
 			if (oT.getEstadoBitacora() == null) {
 				oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_LUEGO_CAMION_PARA_FF);
 			}
 			oT.setEstado(new Estado());
-			oT.getEstado()
-					.setId(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
+			oT.getEstado().setId(
+					Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
 			oT.setServicioTecnico(new ServicioTecnico());
 			oT.getServicioTecnico().setId(0);
 			oT.setTipoCambio(new TipoCambio());
-			oT.getTipoCambio().setCodigo(
-					Constants.CAMBIO_AUTOMATICO_VENTA_MENOR_24_HORAS);
-			/*Elimina validacion de reglas comerciales para flujod e 24 hrs
-			 * ReglaComercial reglaComercial = getReglaComercialVigentePorAutorizacionProveedor(
-					oT.getProducto(), sucursal);
-			if (reglaComercial != null) {
-				oT.setReglaComercial(reglaComercialDAO
-						.getLastReglaComercialHistoricaByIdRegla(reglaComercial
-								.getId()));*/
-				oT.setIdDestino(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF);
-				oT = saveOT(oT, usuario, sucursal);
-				
-				String origen = Constants.CASO_USO_7;
-				oT.setBanderaOrigenOT(origen);
-				ordenTrabajoDAO.updateOTBTNOrigen(oT);
-				return oT;
-			/*} else {
-				throw new SSTException(
-						"Este producto no tiene regla comercial vigente por autorizacion proveedor");
-			}*/
+			oT.getTipoCambio().setCodigo(Constants.CAMBIO_AUTOMATICO_VENTA_MENOR_24_HORAS);
+			/*
+			 * Elimina validacion de reglas comerciales para flujod e 24 hrs ReglaComercial
+			 * reglaComercial = getReglaComercialVigentePorAutorizacionProveedor(
+			 * oT.getProducto(), sucursal); if (reglaComercial != null) {
+			 * oT.setReglaComercial(reglaComercialDAO
+			 * .getLastReglaComercialHistoricaByIdRegla(reglaComercial .getId()));
+			 */
+			oT.setIdDestino(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF);
+			oT = saveOT(oT, usuario, sucursal);
+
+			String origen = Constants.CASO_USO_7;
+			oT.setBanderaOrigenOT(origen);
+			ordenTrabajoDAO.updateOTBTNOrigen(oT);
+			return oT;
+			/*
+			 * } else { throw new SSTException(
+			 * "Este producto no tiene regla comercial vigente por autorizacion proveedor");
+			 * }
+			 */
 
 		} catch (SSTException e) {
 			throw e;
@@ -2735,43 +3461,37 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo saveOTCambioPorProveedor(OrdenTrabajo oT,
-			Ubicacion sucursal, Usuario usuario) throws Exception {
+	public OrdenTrabajo saveOTCambioPorProveedor(OrdenTrabajo oT, Ubicacion sucursal, Usuario usuario)
+			throws Exception {
 		try {
 			oT.setTipo(new TipoOT());
 			oT.getTipo().setCodigo(Constants.TIPO_OT_CAMBIO_AUTOMATICO);
 
-			oT.setSucursal(sucursal != null ? sucursalDAO
-					.getSucursalById(sucursal.getId()) : new Sucursal());
-			oT.setLogistico(usuario != null ? getLogisticoById(usuario.getId())
-					: new Logistico());
+			oT.setSucursal(sucursal != null ? sucursalDAO.getSucursalById(sucursal.getId()) : new Sucursal());
+			oT.setLogistico(usuario != null ? getLogisticoById(usuario.getId()) : new Logistico());
 			if (oT.getEstadoBitacora() == null) {
 				oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_LUEGO_CAMION_PARA_FF);
 			}
 			oT.setEstado(new Estado());
-			oT.getEstado()
-					.setId(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
+			oT.getEstado().setId(
+					Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
 			oT.setServicioTecnico(new ServicioTecnico());
 			oT.getServicioTecnico().setId(0);
 			oT.setTipoCambio(new TipoCambio());
-			oT.getTipoCambio().setCodigo(
-					Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO);
-			ReglaComercial reglaComercial = getReglaComercialVigentePorAutorizacionProveedor(
-					oT.getProducto(), sucursal);
+			oT.getTipoCambio().setCodigo(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO);
+			ReglaComercial reglaComercial = getReglaComercialVigentePorAutorizacionProveedor(oT.getProducto(),
+					sucursal);
 			if (reglaComercial != null) {
-				oT.setReglaComercial(reglaComercialDAO
-						.getLastReglaComercialHistoricaByIdRegla(reglaComercial
-								.getId()));
+				oT.setReglaComercial(reglaComercialDAO.getLastReglaComercialHistoricaByIdRegla(reglaComercial.getId()));
 				oT.setIdDestino(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF);
 				oT = saveOT(oT, usuario, sucursal);
-				
+
 				String origen = Constants.CASO_USO_8;
 				oT.setBanderaOrigenOT(origen);
 				ordenTrabajoDAO.updateOTBTNOrigen(oT);
 				return oT;
 			} else {
-				throw new SSTException(
-						"Este producto no tiene regla comercial vigente por autorizacion proveedor");
+				throw new SSTException("Este producto no tiene regla comercial vigente por autorizacion proveedor");
 			}
 
 		} catch (SSTException e) {
@@ -2782,11 +3502,9 @@ public class SucursalService {
 		}
 	}
 
-	public CambioAutomaticoProveedorCarta getNumeroCertificadoByIdProducto(
-			Producto producto) throws Exception {
+	public CambioAutomaticoProveedorCarta getNumeroCertificadoByIdProducto(Producto producto) throws Exception {
 		try {
-			return cambioAutomaticoProveedorCartaDAO
-					.getNumeroCertificadoByIdProducto(producto);
+			return cambioAutomaticoProveedorCartaDAO.getNumeroCertificadoByIdProducto(producto);
 		} catch (Exception e) {
 			log.error(e, e);
 			throw e;
@@ -2794,32 +3512,25 @@ public class SucursalService {
 	}
 
 	public OrdenTrabajo saveOTCambioPorProveedorCertificado(OrdenTrabajo oT,
-			CambioAutomaticoProveedorCarta cambioAutomaticoProveedorCarta,
-			String productoFisico, Ubicacion sucursal, Usuario usuario)
-			throws Exception {
-		
+			CambioAutomaticoProveedorCarta cambioAutomaticoProveedorCarta, String productoFisico, Ubicacion sucursal,
+			Usuario usuario) throws Exception {
+
 		String origen = "";
 		try {
 			CambioAutomaticoProveedorCarta cartaCambio = new CambioAutomaticoProveedorCarta();
-			cambioAutomaticoProveedorCarta.setProducto(productoDAO
-					.getProductoById(oT.getProducto().getId()));
+			cambioAutomaticoProveedorCarta.setProducto(productoDAO.getProductoById(oT.getProducto().getId()));
 
 			// TODO ELIMINAR CUANDO LO INGRESE EL PROVEEDOR
-			proveedorService
-					.saveCambioAutProveedorCarta(cambioAutomaticoProveedorCarta);
+			proveedorService.saveCambioAutProveedorCarta(cambioAutomaticoProveedorCarta);
 			// END TODO ELIMINAR CUANDO LO INGRESE EL PROVEEDOR
 
 			cartaCambio = proveedorService
 					.getVigenteByNumeroSerieAndProductoAndCertificado(cambioAutomaticoProveedorCarta);
 
 			if (cartaCambio == null) {
-				throw new SSTException(
-						"No existe un certificado para el producto "
-								+ cambioAutomaticoProveedorCarta.getProducto()
-										.getId()
-								+ " - "
-								+ cambioAutomaticoProveedorCarta.getProducto()
-										.getDescripcion());
+				throw new SSTException("No existe un certificado para el producto "
+						+ cambioAutomaticoProveedorCarta.getProducto().getId() + " - "
+						+ cambioAutomaticoProveedorCarta.getProducto().getDescripcion());
 			}
 
 			oT.setTipo(new TipoOT());
@@ -2835,36 +3546,33 @@ public class SucursalService {
 			// {
 
 			// System.out.println("-----> oT.getId()): "+oT.getId());
-			// System.out.println("-----> oT.getConOsinProductoFisico(): "+oT.getConOsinProductoFisico());
-
-			if (oT.getConOsinProductoFisico().equals(
-					Constants.CON_PRODUCTO_FISICO)) {
+			// System.out.println("-----> oT.getConOsinProductoFisico():
+			// "+oT.getConOsinProductoFisico());
+			if (oT.getConOsinProductoFisico().equals(Constants.CON_PRODUCTO_FISICO)) {
 				oT.setBanderaOrigenOT(Constants.CASO_USO_1);
 				origen = Constants.CASO_USO_1;
 				// ordenTrabajoDAO.updateOTBTNOrigen(oT);
 				// oT.getEstado().setId(Constants.OT_ESTADO_PENDIENTE_POR_ACCESORIOS_QUE_TIENE_EL_CLIENTE_CA);
-				oT.getEstado()
-						.setId(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
+				oT.getEstado().setId(
+						Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
 				oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_LUEGO_CAMION_PARA_FF);
-			} else if (oT.getConOsinProductoFisico().equals(
-					Constants.SIN_PRODUCTO_FISICO)) {
+			} else if (oT.getConOsinProductoFisico().equals(Constants.SIN_PRODUCTO_FISICO)) {
 				oT.setBanderaOrigenOT(Constants.CASO_USO_2);
 				origen = Constants.CASO_USO_2;
 				// ordenTrabajoDAO.updateOTBTNOrigen(oT);
-				oT.getEstado()
-						.setId(Constants.OT_ESTADO_PENDIENTE_POR_TICKET_DE_CAMBIO_QUE_TIENE_EL_CLIENTE_CA);
+				oT.getEstado().setId(Constants.OT_ESTADO_PENDIENTE_POR_TICKET_DE_CAMBIO_QUE_TIENE_EL_CLIENTE_CA);
 				oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_ALMACENADA_EN_SUCURSAL);
 			}
 			oT.setServicioTecnico(new ServicioTecnico());
 			oT.getServicioTecnico().setId(0);
 			oT.setTipoCambio(new TipoCambio());
-			oT.getTipoCambio().setCodigo(
-					Constants.CAMBIO_AUTOMATICO_PROVEEDOR_CARTA);
+			oT.getTipoCambio().setCodigo(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_CARTA);
 			oT.setNumeroSerie(cambioAutomaticoProveedorCarta.getNumeroSerie());
 			// oT.setIdDestino(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA);
 			oT.setIdDestino(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF);
 
-			//System.out.println("-----> banderaOrigen: "+oT.getBanderaOrigenOT()+", id:"+oT.getId());
+			// System.out.println("-----> banderaOrigen: "+oT.getBanderaOrigenOT()+",
+			// id:"+oT.getId());
 			oT = saveOT(oT, usuario, sucursal);
 			oT.setBanderaOrigenOT(origen);
 			ordenTrabajoDAO.updateOTBTNOrigen(oT);
@@ -2877,8 +3585,7 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo saveOTFallaFabricacion(OrdenTrabajo oT,
-			Ubicacion sucursal, Usuario usuario) throws Exception {
+	public OrdenTrabajo saveOTFallaFabricacion(OrdenTrabajo oT, Ubicacion sucursal, Usuario usuario) throws Exception {
 		try {
 			oT.setTipo(new TipoOT());
 			oT.getTipo().setCodigo(Constants.TIPO_OT_CAMBIO_AUTOMATICO);
@@ -2888,19 +3595,15 @@ public class SucursalService {
 				oT.setEstadoBitacora(Constants.BITACORA_EN_SUCURSAL_LUEGO_CAMION_PARA_FF);
 			}
 			oT.setEstado(new Estado());
-			oT.getEstado()
-					.setId(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
+			oT.getEstado().setId(
+					Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
 			oT.setServicioTecnico(new ServicioTecnico());
 			oT.getServicioTecnico().setId(0);
 			oT.setTipoCambio(new TipoCambio());
-			oT.getTipoCambio().setCodigo(
-					Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION);
-			ReglaComercial reglaComercial = getReglaComercialVigentePoFallaFabricacion(
-					oT.getProducto(), sucursal);
+			oT.getTipoCambio().setCodigo(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION);
+			ReglaComercial reglaComercial = getReglaComercialVigentePoFallaFabricacion(oT.getProducto(), sucursal);
 			if (reglaComercial != null) {
-				oT.setReglaComercial(reglaComercialDAO
-						.getLastReglaComercialHistoricaByIdRegla(reglaComercial
-								.getId()));
+				oT.setReglaComercial(reglaComercialDAO.getLastReglaComercialHistoricaByIdRegla(reglaComercial.getId()));
 			}
 			oT.setIdDestino(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF);
 			oT = saveOT(oT, usuario, sucursal);
@@ -2920,12 +3623,10 @@ public class SucursalService {
 	 * @return
 	 * @throws Exception
 	 */
-	public OrdenTrabajo saveOT(OrdenTrabajo oT, Usuario usuario,
-			Ubicacion sucursal) throws Exception {
+	public OrdenTrabajo saveOT(OrdenTrabajo oT, Usuario usuario, Ubicacion sucursal) throws Exception {
 		try {
-			oT.setFechaVencimiento(getFechaVencimientoGarantiaProducto(oT
-					.getProducto().getId(), oT.getIdDocumento(), oT
-					.getTipoDocumento()));
+ 			oT.setFechaVencimiento(getFechaVencimientoGarantiaProducto(oT.getProducto().getId(), oT.getIdDocumento(),
+			oT.getTipoDocumento()));
 			oT.setTareaUrgente(false);
 			oT.setTareaUrgenteFF(false);
 			oT.setCalificaFR(true);
@@ -2942,42 +3643,28 @@ public class SucursalService {
 			FilterProducto filterProducto = new FilterProducto();
 			filterProducto.setTipoDocumento(oT.getTipoDocumento());
 			filterProducto.setIdDocumento(oT.getIdDocumento().longValue());
-			filterProducto
-					.setIdProducto((oT.getProducto().getId()).longValue());
-			Integer productoEnDocumento = productoDAO
-					.getTotalSumEnDocumentoByFilter(filterProducto);
+			filterProducto.setIdProducto((oT.getProducto().getId()).longValue());
+			Integer productoEnDocumento = productoDAO.getTotalSumEnDocumentoByFilter(filterProducto);
 			if (productoEnDocumento == 0) {
-				throw new SSTException(
-						"La cantidad de productos en el documento es "
-								+ productoEnDocumento);
+				throw new SSTException("La cantidad de productos en el documento es " + productoEnDocumento);
 			}
 			if (existeOT >= productoEnDocumento) {
 				throw new SSTException(
-						"No se puede crear la orden de trabajo, ya existen "
-								+ existeOT + " en el sistema.");
+						"No se puede crear la orden de trabajo, ya existen " + existeOT + " en el sistema.");
 			}
-			if (oT.getTipo().getCodigo()
-					.equals(Constants.TIPO_OT_GARANTIA_MASTER)) {
-				if (oT.getNumeroAtencion() != null
-						&& oT.getNumeroAtencion() > 0
-						&& ordenTrabajoDAO.existeNumeroAtencion(oT
-								.getNumeroAtencion()) > 0) {
+			if (oT.getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_MASTER)) {
+				if (oT.getNumeroAtencion() != null && oT.getNumeroAtencion() > 0
+						&& ordenTrabajoDAO.existeNumeroAtencion(oT.getNumeroAtencion()) > 0) {
 					throw new SSTException(
-							"Ya existe una orden de trabajo con el numero de atencion "
-									+ oT.getNumeroAtencion() + ".");
+							"Ya existe una orden de trabajo con el numero de atencion " + oT.getNumeroAtencion() + ".");
 				}
-				if (oT.getNumeroCambio() != null
-						&& oT.getNumeroCambio() > 0
-						&& ordenTrabajoDAO.existeNumeroCambio(oT
-								.getNumeroCambio()) > 0) {
-					throw new SSTException(
-							"Ya existe una orden de trabajo con el numero de autorizacion de cambio "
-									+ oT.getNumeroCambio() + ".");
+				if (oT.getNumeroCambio() != null && oT.getNumeroCambio() > 0
+						&& ordenTrabajoDAO.existeNumeroCambio(oT.getNumeroCambio()) > 0) {
+					throw new SSTException("Ya existe una orden de trabajo con el numero de autorizacion de cambio "
+							+ oT.getNumeroCambio() + ".");
 				}
-				if ((oT.getNumeroCambio() == null || oT.getNumeroCambio()
-						.equals(0))
-						&& (oT.getNumeroAtencion() == null || oT
-								.getNumeroAtencion().equals(0))) {
+				if ((oT.getNumeroCambio() == null || oT.getNumeroCambio().equals(0))
+						&& (oT.getNumeroAtencion() == null || oT.getNumeroAtencion().equals(0))) {
 					throw new SSTException(
 							"Para crear una OT de garantia Master el numero de atencion o de autorizacion de cambio deben ser mayor que cero.");
 				}
@@ -2987,12 +3674,9 @@ public class SucursalService {
 			oT.setVigente(true);
 			oT.setCerrada(false);
 			oT.setProcesadoOW(false);
-			if (oT.getTipo().getCodigo()
-					.equals(Constants.TIPO_OT_CAMBIO_AUTOMATICO)) {
-				Ubicacion ubicacion = ubicacionDAO.get(oT.getSucursal().getId()
-						.longValue());
-				if (oT.getTipoCambio().getCodigo()
-						.equals(Constants.CAMBIO_AUTOMATICO_VALOR)) {
+			if (oT.getTipo().getCodigo().equals(Constants.TIPO_OT_CAMBIO_AUTOMATICO)) {
+				Ubicacion ubicacion = ubicacionDAO.get(oT.getSucursal().getId().longValue());
+				if (oT.getTipoCambio().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_VALOR)) {
 					oT.setNumeroXN(oWService.createXN(oT, ubicacion));
 					oT.setProcesadoOW(true);
 					oT.setFechaCambio(fechaActual);
@@ -3001,24 +3685,23 @@ public class SucursalService {
 					oT.setCerradaCliente(true);
 					ordenTrabajoDAO.saveOT(oT);
 
-				} else if (Constants.CAMBIO_AUTOMATICO_VENTA_MENOR_24_HORAS.equals(oT.getTipoCambio().getCodigo())) { //TODO CU-07
-					//System.out.println("generar venta menor a 24 horas");
+				} else if (Constants.CAMBIO_AUTOMATICO_VENTA_MENOR_24_HORAS.equals(oT.getTipoCambio().getCodigo())) { // TODO
+																														// CU-07
+					// System.out.println("generar venta menor a 24 horas");
 					oT.setFechaCambio(fechaActual);
 					oT.setCambioAutorizado(true);
 					oT.setCerrada(false);
 					oT.setCerradaCliente(true);
 					ordenTrabajoDAO.saveOT(oT);
-					
-				} else if (oT.getTipoCambio().getCodigo()
-						.equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION)) {
+
+				} else if (oT.getTipoCambio().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION)) {
 					oT.setFechaCambio(fechaActual);
 					oT.setCambioAutorizado(true);
 					oT.setCerrada(false);
 					oT.setCerradaCliente(false);
 					ordenTrabajoDAO.saveOT(oT);
 					// CU- 05 FALLA REITERADA
-				} else if (oT.getTipoCambio().getCodigo()
-						.equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA)) {
+				} else if (oT.getTipoCambio().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA)) {
 					// oT.setNumeroXN(oWService.createXN(oT,ubicacion));
 					// interfazService.createInterfazPMM(ubicacion,oT,Constants.DC_QUANTITY_POSITIVO);
 					oT.setFechaCambio(fechaActual);
@@ -3026,14 +3709,14 @@ public class SucursalService {
 					oT.setCerrada(false);
 					oT.setCerradaCliente(false);
 					ordenTrabajoDAO.saveOT(oT);
-				} else if (oT.getTipoCambio().getCodigo()
-						.equals(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_CARTA)) {
+				} else if (oT.getTipoCambio().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_CARTA)) {
 					oT.setFechaCambio(fechaActual);
 					oT.setCambioAutorizado(true);
 					oT.setCerrada(false);
 					oT.setCerradaCliente(false);
 					ordenTrabajoDAO.saveOT(oT);
-				} else if (oT.getTipoCambio().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO)) { //TODO CU-08
+				} else if (oT.getTipoCambio().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO)) { // TODO
+																													// CU-08
 					oT.setFechaCambio(fechaActual);
 					oT.setCambioAutorizado(true);
 					oT.setCerrada(false);
@@ -3049,15 +3732,15 @@ public class SucursalService {
 					}
 
 					/* Cambio en jefe de tienda por menor valor $15000 */
-					if (oT.getBanderaOrigenOT().equals(Constants.CASO_USO_6) || oT.getBanderaOrigenOT().equals(Constants.CASO_USO_9)) {
-						// -----> 1° Generar xn
+					if (oT.getBanderaOrigenOT().equals(Constants.CASO_USO_6)
+							|| oT.getBanderaOrigenOT().equals(Constants.CASO_USO_9)) {
+						// -----> 1ï¿½ Generar xn
 						oT.setNumeroXN(oWService.createXN(oT, ubicacion));
 						oT.setProcesadoOW(true);
 						oT.setTicketCambio(getNumeroTicketCambio());
 						ordenTrabajoDAO.updateTicketCambio(oT);
-						// -----> 2° Aumento del NO disponible en PMM
-						interfazService.createInterfazPMM(ubicacion, oT,
-								Constants.DC_QUANTITY_POSITIVO);
+						// -----> 2ï¿½ Aumento del NO disponible en PMM
+						interfazService.createInterfazPMM(ubicacion, oT, Constants.DC_QUANTITY_POSITIVO);
 						oT.setCerradaCliente(true);
 						oT.setCerrada(false);
 					}
@@ -3065,13 +3748,12 @@ public class SucursalService {
 					oT.setFechaCambio(fechaActual);
 					oT.setCambioAutorizado(true);
 					ordenTrabajoDAO.saveOT(oT);
-					// -----> 3° Tracking
+					// -----> 3ï¿½ Tracking
 					interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_XN);
-					// -----> 4° Tracking
+					// -----> 4ï¿½ Tracking
 					interfazService.saveOtTracking(oT, Constants.ID_OT_INTERFAZ_PMM);
-					
-				} else if (oT.getTipoCambio().getCodigo()
-						.equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA)) {
+
+				} else if (oT.getTipoCambio().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA)) {
 					oT.setFechaCambio(fechaActual);
 					oT.setCambioAutorizado(true);
 					oT.setCerrada(false);
@@ -3083,60 +3765,44 @@ public class SucursalService {
 			}
 
 			/*
-			 * Proyecto : 10021 - Mejoras Servicio Tecnico Objetivo : Asignar la
-			 * ejecutiva al momento de crear la OT Fecha : 07/09/2015 Autor :
-			 * Richard Flores - ScriptIA
+			 * Proyecto : 10021 - Mejoras Servicio Tecnico Objetivo : Asignar la ejecutiva
+			 * al momento de crear la OT Fecha : 07/09/2015 Autor : Richard Flores -
+			 * ScriptIA
 			 * 
-			 * INICIO*************** Original ********************* if
-			 * (!(oT.getTipo
+			 * INICIO*************** Original ********************* if (!(oT.getTipo
 			 * ().getCodigo().equals(Constants.TIPO_OT_GARANTIA_MASTER)) &&
-			 * (oT.getServicioTecnico()!=null && oT.getServicioTecnico().getId()
-			 * != null && oT.getServicioTecnico().getId() > 0)) {
-			 * FilterEjecutiva filterEjecutiva = new FilterEjecutiva();
-			 * filterEjecutiva
-			 * .setIdSTecnico(oT.getServicioTecnico().getId().longValue());
-			 * filterEjecutiva
+			 * (oT.getServicioTecnico()!=null && oT.getServicioTecnico().getId() != null &&
+			 * oT.getServicioTecnico().getId() > 0)) { FilterEjecutiva filterEjecutiva = new
+			 * FilterEjecutiva(); filterEjecutiva
+			 * .setIdSTecnico(oT.getServicioTecnico().getId().longValue()); filterEjecutiva
 			 * .setIdProducto(oT.getProducto().getId().longValue()); if
-			 * (ejecutivaDAO.existeEjecutivaByFilter(filterEjecutiva) == 1) {
-			 * Persona ejecutiva =
-			 * ejecutivaDAO.getEjecutivaByFilter(filterEjecutiva); if (ejecutiva
+			 * (ejecutivaDAO.existeEjecutivaByFilter(filterEjecutiva) == 1) { Persona
+			 * ejecutiva = ejecutivaDAO.getEjecutivaByFilter(filterEjecutiva); if (ejecutiva
 			 * != null && ejecutiva.getId() != null && ejecutiva.getId() > 0) {
 			 * ordenTrabajoDAO.updateEjecutiva(oT); } } }
 			 * *********************************************
 			 */
-			if (!(oT.getTipo().getCodigo()
-					.equals(Constants.TIPO_OT_GARANTIA_MASTER))) {
-				if ((oT.getServicioTecnico() != null
-						&& oT.getServicioTecnico().getId() != null && oT
-						.getServicioTecnico().getId() > 0)) {
+			if (!(oT.getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_MASTER))) {
+				if ((oT.getServicioTecnico() != null && oT.getServicioTecnico().getId() != null
+						&& oT.getServicioTecnico().getId() > 0)) {
 					FilterEjecutiva filterEjecutiva = new FilterEjecutiva();
-					filterEjecutiva.setIdSTecnico(oT.getServicioTecnico()
-							.getId().longValue());
-					filterEjecutiva.setIdProducto(oT.getProducto().getId()
-							.longValue());
+					filterEjecutiva.setIdSTecnico(oT.getServicioTecnico().getId().longValue());
+					filterEjecutiva.setIdProducto(oT.getProducto().getId().longValue());
 					if (ejecutivaDAO.existeEjecutivaByFilter(filterEjecutiva) == 1) {
-						Persona ejecutiva = ejecutivaDAO
-								.getEjecutivaByFilter(filterEjecutiva);
-						if (ejecutiva != null && ejecutiva.getId() != null
-								&& ejecutiva.getId() > 0) {
+						Persona ejecutiva = ejecutivaDAO.getEjecutivaByFilter(filterEjecutiva);
+						if (ejecutiva != null && ejecutiva.getId() != null && ejecutiva.getId() > 0) {
 							oT.setEjecutiva(ejecutiva);
 							ordenTrabajoDAO.updateEjecutiva(oT);
 						}
 					}
-				} else if (oT.getTipo().getCodigo()
-						.equals(Constants.TIPO_OT_GARANTIA_PROVEEDOR)
-						|| oT.getTipo()
-								.getCodigo()
-								.equals(Constants.TIPO_OT_GARANTIA_PROVEEDOR_CF)) {
+				} else if (oT.getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_PROVEEDOR)
+						|| oT.getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_PROVEEDOR_CF)) {
 					FilterEjecutiva filterEjecutiva = new FilterEjecutiva();
 					filterEjecutiva.setIdSTecnico(0L);
-					filterEjecutiva.setIdProducto(oT.getProducto().getId()
-							.longValue());
+					filterEjecutiva.setIdProducto(oT.getProducto().getId().longValue());
 					if (ejecutivaDAO.existeEjecutivaByFilter(filterEjecutiva) >= 1) {
-						Persona ejecutiva = ejecutivaDAO
-								.getEjecutivaByFilter(filterEjecutiva);
-						if (ejecutiva != null && ejecutiva.getId() != null
-								&& ejecutiva.getId() > 0) {
+						Persona ejecutiva = ejecutivaDAO.getEjecutivaByFilter(filterEjecutiva);
+						if (ejecutiva != null && ejecutiva.getId() != null && ejecutiva.getId() > 0) {
 							oT.setEjecutiva(ejecutiva);
 							ordenTrabajoDAO.updateEjecutiva(oT);
 						}
@@ -3150,43 +3816,34 @@ public class SucursalService {
 			if (oT.getIdDestino() != null && oT.getIdDestino() > 0) {
 				ordenTrabajoDAO.updateDestinoOT(oT);
 			}
-			if (oT.getServicioTecnico() != null
-					&& oT.getServicioTecnico().getId() > 0) {
+			if (oT.getServicioTecnico() != null && oT.getServicioTecnico().getId() > 0) {
 				ordenTrabajoDAO.updateIdSTecnico(oT);
 			}
-			if (oT.getSucursal() != null && oT.getSucursal().getId() != null
-					&& oT.getSucursal().getId() > 0) {
+			if (oT.getSucursal() != null && oT.getSucursal().getId() != null && oT.getSucursal().getId() > 0) {
 				ordenTrabajoDAO.updateIdSucursal(oT);
 			}
 
-			if (oT.getTipo().getCodigo()
-					.equals(Constants.TIPO_OT_GARANTIA_MASTER)
-					&& oT.getNumeroCambio() != null && oT.getNumeroCambio() > 0) {
+			if (oT.getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_MASTER) && oT.getNumeroCambio() != null
+					&& oT.getNumeroCambio() > 0) {
 				Empresa empresaFacturar = new Empresa();
 				oT.setEmpresaFacturar(empresaFacturar);
-				oT.getEmpresaFacturar().setId(
-						Constants.UBICACION_NUEVA_DE_LYON_072_PISO_6
-								.longValue());
+				oT.getEmpresaFacturar().setId(Constants.UBICACION_NUEVA_DE_LYON_072_PISO_6.longValue());
 				oT.setMotivoCambio("Creacion de OT de cambio");
 				oT.setTipoFacturar("Tienda");
 				oT.setCambioAutorizado(true);
 				ordenTrabajoDAO.updateOTCambio(oT);
 			}
 
-			if (!ordenTrabajoDAO.existeBitacora(
-					oT.getEstadoBitacora().longValue()).equals(0)) {
+			if (!ordenTrabajoDAO.existeBitacora(oT.getEstadoBitacora().longValue()).equals(0)) {
 				Long idUbicacion = oT.getSucursal().getId().longValue();
 
-				if (oT.getEstadoBitacora()
-						.equals(Constants.BITACORA_EN_SERVICIO_TECNICO_A_LA_ESPERA_DE_SER_RECOGIDO)
+				if (oT.getEstadoBitacora().equals(Constants.BITACORA_EN_SERVICIO_TECNICO_A_LA_ESPERA_DE_SER_RECOGIDO)
 						|| oT.getEstadoBitacora()
 								.equals(Constants.BITACORA_EN_SERVICIO_TECNICO_LUEGO_A_CAMION_A_SUCURSAL)) {
 					idUbicacion = oT.getServicioTecnico().getId().longValue();
-				} else if (oT
-						.getEstadoBitacora()
+				} else if (oT.getEstadoBitacora()
 						.equals(Constants.BITACORA_EN_CLIENTE_DESPUES_ENTREGA_A_SUCURSAL_20001000)
-						|| oT.getEstadoBitacora()
-								.equals(Constants.BITACORA_EN_CLIENTE_DESPUES_ENTREGA_A_SUCURSAL)
+						|| oT.getEstadoBitacora().equals(Constants.BITACORA_EN_CLIENTE_DESPUES_ENTREGA_A_SUCURSAL)
 						|| oT.getEstadoBitacora()
 								.equals(Constants.BITACORA_EN_CLIENTE_A_LA_ESPERA_DE_RECUPERARLO_UNA_SUCURSAL)) {
 					idUbicacion = Constants.UBICACION_ID_CLIENTE;
@@ -3203,8 +3860,7 @@ public class SucursalService {
 			FilterAccesorio filterAccesorio = new FilterAccesorio();
 			filterAccesorio.setIdProducto(oT.getProducto().getId().longValue());
 			filterAccesorio.setVigente(true);
-			List<Accesorio> accesorios = this
-					.listAccesoriosByFilter(filterAccesorio);
+			List<Accesorio> accesorios = this.listAccesoriosByFilter(filterAccesorio);
 			for (Accesorio acc : accesorios) {
 				if (acc.getVigente()) {
 					acc.setUbicacion(new Ubicacion());
@@ -3218,15 +3874,13 @@ public class SucursalService {
 				}
 			}
 
-			if (!oT.getTipo().getCodigo()
-					.equals(Constants.TIPO_OT_GARANTIA_BIG_TICKET)) {
+			if (!oT.getTipo().getCodigo().equals(Constants.TIPO_OT_GARANTIA_BIG_TICKET)) {
 				FilterParte filterParte = new FilterParte();
 				filterParte.setIdProducto(oT.getProducto().getId().longValue());
 				filterParte.setVigente(true);
 				List<Parte> partes = parteDAO.listPartesByFilter(filterParte);
 				if (partes.size() == 0) {
-					Producto producto = productoDAO.getProductoById(filter
-							.getIdProducto());
+					Producto producto = productoDAO.getProductoById(filter.getIdProducto());
 					filterParte.setIdFamilia(producto.getFamilia().getId());
 					filterParte.setIdProducto(null);
 					partes = parteDAO.listPartesByFilter(filterParte);
@@ -3246,10 +3900,8 @@ public class SucursalService {
 			throw e;
 		} catch (Exception e) {
 			log.error(e, e);
-			log.error("acción realizada por usuario : " + usuario.getRut()
-					+ ", ubicación : " + sucursal.getId() + " "
-					+ sucursal.getNombre() + ", Tipo documento : "
-					+ oT.getTipoDocumento() + ", N° documento: "
+			log.error("acciï¿½n realizada por usuario : " + usuario.getRut() + ", ubicaciï¿½n : " + sucursal.getId() + " "
+					+ sucursal.getNombre() + ", Tipo documento : " + oT.getTipoDocumento() + ", Nï¿½ documento: "
 					+ oT.getIdDocumento());
 			throw e;
 		}
@@ -3257,8 +3909,7 @@ public class SucursalService {
 
 	private void iniciarBitacora(Bitacora bitacora) throws Exception {
 		try {
-			List<Bitacora> bitacoras = bitacoraDAO.listBitacorasByIdOT(bitacora
-					.getIdOT());
+			List<Bitacora> bitacoras = bitacoraDAO.listBitacorasByIdOT(bitacora.getIdOT());
 			if (bitacoras.size() > 0) {
 				bitacoraDAO.deleteBitacoraByOT(bitacora.getIdOT());
 			}
@@ -3269,15 +3920,13 @@ public class SucursalService {
 		}
 	}
 
-	public ListRange listOTEnTransito(FilterOT filter, GridControl gridControl,
-			Ubicacion ubicacion) throws Exception {
+	public ListRange listOTEnTransito(FilterOT filter, GridControl gridControl, Ubicacion ubicacion) throws Exception {
 		try {
 			ListRange listRange = new ListRange();
 			filter.setOrderBy(gridControl.getOrderBy());
 			filter.setSortOrder(gridControl.getSortOrder());
 			filter.setSucursal(ubicacion.getId());
-			listRange.setRows(ordenTrabajoDAO.listOTEnTransito(filter,
-					gridControl));
+			listRange.setRows(ordenTrabajoDAO.listOTEnTransito(filter, gridControl));
 			listRange.setTotal(ordenTrabajoDAO.getTotalOTEnTransito(filter));
 			return listRange;
 		} catch (Exception e) {
@@ -3286,17 +3935,15 @@ public class SucursalService {
 		}
 	}
 
-	public ListRange listOTPendientesAccesorios(FilterOT filter,
-			GridControl gridControl, Ubicacion ubicacion) throws Exception {
+	public ListRange listOTPendientesAccesorios(FilterOT filter, GridControl gridControl, Ubicacion ubicacion)
+			throws Exception {
 		try {
 			ListRange listRange = new ListRange();
 			filter.setOrderBy(gridControl.getOrderBy());
 			filter.setSortOrder(gridControl.getSortOrder());
 			filter.setSucursal(ubicacion.getId());
-			listRange.setRows(ordenTrabajoDAO.listOTPendientesEnSucursal(
-					filter, gridControl));
-			listRange.setTotal(ordenTrabajoDAO
-					.getTotalOTPendientesEnSucursal(filter));
+			listRange.setRows(ordenTrabajoDAO.listOTPendientesEnSucursal(filter, gridControl));
+			listRange.setTotal(ordenTrabajoDAO.getTotalOTPendientesEnSucursal(filter));
 			return listRange;
 		} catch (Exception e) {
 			log.error(e, e);
@@ -3304,19 +3951,15 @@ public class SucursalService {
 		}
 	}
 
-	public boolean saveParteOT(List<Parte> partes, Usuario usuario,
-			Ubicacion ubicacion) throws Exception {
+	public boolean saveParteOT(List<Parte> partes, Usuario usuario, Ubicacion ubicacion) throws Exception {
 		try {
 			Date fecha = utilDAO.getDateTrunc();
-			SimpleDateFormat simpleDateFormat = new SimpleDateFormat(
-					"dd/MM/yyyy");
+			SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd/MM/yyyy");
 			String fechaActual = simpleDateFormat.format(fecha);
 			for (Parte parte : partes) {
 				if (!parte.getObservacion().equals("")) {
-					String obs = ubicacion.getId() + "::" + ubicacion.getTipo()
-							+ "::" + fechaActual + "::"
-							+ usuario.getNombreCompleto() + ":: "
-							+ parte.getObservacion();
+					String obs = ubicacion.getId() + "::" + ubicacion.getTipo() + "::" + fechaActual + "::"
+							+ usuario.getNombreCompleto() + ":: " + parte.getObservacion();
 					parte.setObservacion(obs);
 				}
 				parteDAO.updateParteOT(parte);
@@ -3328,32 +3971,26 @@ public class SucursalService {
 		}
 	}
 
-	public void updateParteOTConAnteriorObervacion(List<Parte> partes,
-			Usuario usuario, Ubicacion ubicacion) throws Exception {
+	public void updateParteOTConAnteriorObervacion(List<Parte> partes, Usuario usuario, Ubicacion ubicacion)
+			throws Exception {
 		try {
 			Date fecha = utilDAO.getDateTrunc();
-			SimpleDateFormat simpleDateFormat = new SimpleDateFormat(
-					"dd/MM/yyyy");
+			SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd/MM/yyyy");
 			String fechaActual = simpleDateFormat.format(fecha);
 			if (partes != null) {
 				for (Parte parte : partes) {
 					Parte parteActual = parteDAO.getParteOTbyId(parte.getId());
 					String obs = "";
-					if (parte.getObservacion() != null
-							&& !parte.getObservacion().equals("")) {
+					if (parte.getObservacion() != null && !parte.getObservacion().equals("")) {
 						if (!parte.getObservacion().equals("")) {
-							obs = ubicacion.getId() + "::"
-									+ ubicacion.getTipo() + "::" + fechaActual
-									+ "::" + usuario.getNombreCompleto()
-									+ ":: " + parte.getObservacion();
+							obs = ubicacion.getId() + "::" + ubicacion.getTipo() + "::" + fechaActual + "::"
+									+ usuario.getNombreCompleto() + ":: " + parte.getObservacion();
 							parte.setObservacion(obs);
 						}
 					}
-					if (parteActual.getObservaciones() != null
-							&& parteActual.getObservaciones().length() > 0) {
+					if (parteActual.getObservaciones() != null && parteActual.getObservaciones().length() > 0) {
 						if (!obs.equals("")) {
-							parte.setObservacion(obs + '\n'
-									+ parteActual.getObservaciones());
+							parte.setObservacion(obs + '\n' + parteActual.getObservaciones());
 						} else {
 							parte.setObservacion(parteActual.getObservaciones());
 						}
@@ -3385,29 +4022,28 @@ public class SucursalService {
 		}
 	}
 
-	public void recibirOTSucursal(OrdenTrabajo ot, Ubicacion ubicacion)
-			throws Exception {
+	public void recibirOTSucursal(OrdenTrabajo ot, Ubicacion ubicacion) throws Exception {
 		try {
-			List<Bitacora> bitacoras = bitacoraDAO.listBitacorasByIdOT(ot
-					.getId());
+			List<Bitacora> bitacoras = bitacoraDAO.listBitacorasByIdOT(ot.getId());
 			Date fecha = utilDAO.getDate();
 
-			if (bitacoras == null || bitacoras.size() == 0)
+			if (bitacoras == null || bitacoras.size() == 0) {
 				throw new SSTException("La orden de trabajo no tiene bitacora");
+			}
 
 			if (bitacoras.size() > 1) {
 				Bitacora bitacora = new Bitacora();
 				bitacora.setOrdenTrabajo(ot);
 				bitacora.setEstado(new Estado());
-				bitacora.getEstado()
-						.setId(Constants.BITACORA_EN_CLIENTE_DESPUES_ENTREGA_A_SUCURSAL_20001000);
+				bitacora.getEstado().setId(Constants.BITACORA_EN_CLIENTE_DESPUES_ENTREGA_A_SUCURSAL_20001000);
 				bitacoraDAO.deleteBitacoraByOTNoEstado(bitacora);
 			}
 
 			bitacoras = bitacoraDAO.listBitacorasByIdOT(ot.getId());
 
-			if (bitacoras == null || bitacoras.size() == 0)
+			if (bitacoras == null || bitacoras.size() == 0) {
 				throw new SSTException("La orden de trabajo no tiene bitacora");
+			}
 
 			if (bitacoras.size() == 1) {
 				Bitacora bitacora = bitacoras.get(0);
@@ -3417,18 +4053,16 @@ public class SucursalService {
 				bitacoraSiguiente.setOrdenTrabajo(ot);
 				bitacoraSiguiente.setFechaEntrada(fecha);
 				bitacoraSiguiente.setEstado(new Estado());
-				bitacoraSiguiente
-						.getEstado()
-						.setId(Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_AL_SERVICIO_TECNICO_LOCAL);
+				bitacoraSiguiente.getEstado().setId(
+						Constants.BITACORA_EN_SUCURSAL_INICIO_DESPUES_ENTREGA_A_CAMION_AL_SERVICIO_TECNICO_LOCAL);
 				bitacoraSiguiente.setUbicacion(ubicacion);
 				bitacoraDAO.save(bitacoraSiguiente);
 				ot.setEstado(new Estado());
-				ot.getEstado()
-						.setId(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
+				ot.getEstado().setId(
+						Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE);
 				ordenTrabajoDAO.updateEstadoOT(ot);
 			} else {
-				throw new SSTException(
-						"Error con la bitacora, no tiene arreglo");
+				throw new SSTException("Error con la bitacora, no tiene arreglo");
 			}
 
 		} catch (SSTException e) {
@@ -3439,43 +4073,32 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo getOTByFilterForEntregaCliente(FilterOT filter)
-			throws Exception {
+	public OrdenTrabajo getOTByFilterForEntregaCliente(FilterOT filter) throws Exception {
 		try {
 			filter.setCerradaCliente(false);
 			filter.setVigente(true);
 			filter.setCerrada(false);
 			OrdenTrabajo orden = this.getOTByFilter(filter);
-			if (orden
-					.getEstado()
-					.getId()
-					.equals(Constants.OT_ESTADO_CON_RECEPCION_ACEPTADA_EN_SUCURSAL))
+			if (orden.getEstado().getId().equals(Constants.OT_ESTADO_CON_RECEPCION_ACEPTADA_EN_SUCURSAL)) {
 				return ordenTrabajoDAO.getOTById(orden.getId());
-			if (orden
-					.getEstado()
-					.getId()
-					.equals(Constants.OT_ESTADO_CON_RECEPCION_ACEPTADA_CON_OBSERVACION_EN_SUCURSAL))
-				return ordenTrabajoDAO.getOTById(orden.getId());
+			}
 			if (orden.getEstado().getId()
-					.equals(Constants.OT_ESTADO_RECHAZADA_POR_CLIENTE))
+					.equals(Constants.OT_ESTADO_CON_RECEPCION_ACEPTADA_CON_OBSERVACION_EN_SUCURSAL)) {
 				return ordenTrabajoDAO.getOTById(orden.getId());
+			}
+			if (orden.getEstado().getId().equals(Constants.OT_ESTADO_RECHAZADA_POR_CLIENTE)) {
+				return ordenTrabajoDAO.getOTById(orden.getId());
+			}
 			if (orden.getCambioAutorizado()
-					&& !orden
-							.getEstado()
-							.getId()
-							.equals(Constants.OT_ESTADO_EN_SUCURSAL_A_LA_ESPERA_DE_SER_ENVIADA)
-					&& !orden
-							.getEstado()
-							.getId()
+					&& !orden.getEstado().getId().equals(Constants.OT_ESTADO_EN_SUCURSAL_A_LA_ESPERA_DE_SER_ENVIADA)
+					&& !orden.getEstado().getId()
 							.equals(Constants.OT_ESTADO_PENDIENTE_POR_ACCESORIOS_QUE_TIENE_EL_CLIENTE)
-					&& !orden
-							.getEstado()
-							.getId()
-							.equals(Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE))
+					&& !orden.getEstado().getId().equals(
+							Constants.OT_ESTADO_EN_SUCURSAL_EN_PREPARACION_CUANDO_SE_ASIGNAN_LOS_TIPOS_DE_FALLAS_ACCESORIOS_REVISION_CLIENTE)) {
 				return ordenTrabajoDAO.getOTById(orden.getId());
-			else
-				throw new SSTException("La orden de trabajo tiene el estado : "
-						+ orden.getEstado().getDescripcion());
+			} else {
+				throw new SSTException("La orden de trabajo tiene el estado : " + orden.getEstado().getDescripcion());
+			}
 		} catch (SSTException e) {
 			throw e;
 		} catch (Exception e) {
@@ -3491,14 +4114,14 @@ public class SucursalService {
 				filter.setCodigoBarraAccesorio(filter.getCodigoBarra());
 				filter.setCodigoBarra(null);
 				ordenes = ordenTrabajoDAO.listByFilter(filter);
-				if (ordenes == null || ordenes.size() == 0)
-					throw new SSTException(
-							"No hay ordenes con los parametros ingresados");
+				if (ordenes == null || ordenes.size() == 0) {
+					throw new SSTException("No hay ordenes con los parametros ingresados");
+				}
 			}
 
-			if (ordenes.size() > 1)
-				throw new SSTException(
-						"Existe mas de una ot que cumple las condiciones");
+			if (ordenes.size() > 1) {
+				throw new SSTException("Existe mas de una ot que cumple las condiciones");
+			}
 
 			return ordenTrabajoDAO.getOTById(ordenes.get(0).getId());
 
@@ -3508,6 +4131,12 @@ public class SucursalService {
 			log.error(e, e);
 			throw e;
 		}
+	}
+	
+	
+	public String getTipoOT(Long idOt)
+	{
+		return ordenTrabajoDAO.getTipoOT(idOt);
 	}
 
 	public Ubicacion getUbicacionOT(Long idOT) throws Exception {
@@ -3521,8 +4150,7 @@ public class SucursalService {
 
 	public Ubicacion getUbicacionOTAccesorio(Long idOT) throws Exception {
 		try {
-			Ubicacion ubicacionOTAccesorio = ubicacionDAO
-					.getUbicacionOTAccesorios(idOT);
+			Ubicacion ubicacionOTAccesorio = ubicacionDAO.getUbicacionOTAccesorios(idOT);
 			return ubicacionOTAccesorio;
 		} catch (Exception e) {
 			log.error(e, e);
@@ -3530,20 +4158,17 @@ public class SucursalService {
 		}
 	}
 
-	public Guia getGuiaRecepcion(Long idOT, String guiaAccesorio,
-			Ubicacion ubicacion) throws Exception {
+	public Guia getGuiaRecepcion(Long idOT, String guiaAccesorio, Ubicacion ubicacion) throws Exception {
 		try {
 			Guia guia = new Guia();
 			guia.setOrdenTrabajo(new OrdenTrabajo());
 			guia.getOrdenTrabajo().setId(idOT);
 			guia.setDestino(ubicacion);
-			if (guiaAccesorio != null
-					&& guiaAccesorio.equals(Constants.GUIA_TIPO_ACCESORIO)) {
+			if (guiaAccesorio != null && guiaAccesorio.equals(Constants.GUIA_TIPO_ACCESORIO)) {
 				guia.setTipoGuia(Constants.GUIA_TIPO_ACCESORIO);
 				Ubicacion origen = ubicacionDAO.getUbicacionOTAccesorios(idOT);
 				guia.setOrigen(origen);
-			} else if (guiaAccesorio != null
-					&& guiaAccesorio.equals(Constants.GUIA_TIPO_UNITARIA)) {
+			} else if (guiaAccesorio != null && guiaAccesorio.equals(Constants.GUIA_TIPO_UNITARIA)) {
 				guia.setTipoGuia(Constants.GUIA_TIPO_UNITARIA);
 				Ubicacion origen = ubicacionDAO.getUbicacionOT(idOT);
 				guia.setOrigen(origen);
@@ -3568,8 +4193,7 @@ public class SucursalService {
 		}
 	}
 
-	public List<Guia> listGuiaRecepcion(Long idOT, Ubicacion ubicacion)
-			throws Exception {
+	public List<Guia> listGuiaRecepcion(Long idOT, Ubicacion ubicacion) throws Exception {
 		try {
 			Guia guia = new Guia();
 			guia.setOrdenTrabajo(new OrdenTrabajo());
@@ -3582,8 +4206,7 @@ public class SucursalService {
 		}
 	}
 
-	public Integer getCantidadOtsEjecutiva(Usuario usuario, Long idOT)
-			throws Exception {
+	public Integer getCantidadOtsEjecutiva(Usuario usuario, Long idOT) throws Exception {
 		try {
 			FilterOT filter = new FilterOT();
 			filter.setIdOT(idOT);
@@ -3605,12 +4228,11 @@ public class SucursalService {
 		}
 	}
 
-	public List<Accesorio> listAccesoriosForGuiaTipo(OrdenTrabajo ordenTrabajo,
-			Guia guia, Boolean cliente, Ubicacion ubicacion) throws Exception {
+	public List<Accesorio> listAccesoriosForGuiaTipo(OrdenTrabajo ordenTrabajo, Guia guia, Boolean cliente,
+			Ubicacion ubicacion) throws Exception {
 		try {
 			// en caso de FF revisar Guia y OT
-			if (ubicacion.getId().equals(
-					Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF)) {
+			if (ubicacion.getId().equals(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF)) {
 				FilterGuia filterGuia = new FilterGuia();
 				filterGuia.setIdOT(ordenTrabajo.getId());
 				filterGuia.setIdGuia(guia.getId());
@@ -3618,17 +4240,14 @@ public class SucursalService {
 			}
 			// REVISAR EMISION y RE EMISION DE FF
 			if (cliente) {
-				return accesorioDAO
-						.ListAccesoriosFromClienteByIdOT(ordenTrabajo.getId());
+				return accesorioDAO.ListAccesoriosFromClienteByIdOT(ordenTrabajo.getId());
 			} else {
 				if (guia.getId() != null) {
 					FilterGuia filterGuia = new FilterGuia();
 					filterGuia.setIdGuia(guia.getId());
 					return accesorioDAO.listAccesoriosFromIdGuia(filterGuia);
 				} else {
-					return accesorioDAO
-							.ListAccesoriosFromGuiaAnterior(ordenTrabajo
-									.getId());
+					return accesorioDAO.ListAccesoriosFromGuiaAnterior(ordenTrabajo.getId());
 				}
 			}
 		} catch (Exception e) {
@@ -3637,11 +4256,9 @@ public class SucursalService {
 		}
 	}
 
-	public List<Accesorio> listAllAccesoriosFromTipoGuia(Guia guia)
-			throws Exception {
+	public List<Accesorio> listAllAccesoriosFromTipoGuia(Guia guia) throws Exception {
 		try {
-			List<Accesorio> accesorios = accesorioDAO
-					.listAllAccesoriosFromTipoGuia(guia);
+			List<Accesorio> accesorios = accesorioDAO.listAllAccesoriosFromTipoGuia(guia);
 			return accesorios;
 		} catch (Exception e) {
 			log.error(e, e);
@@ -3650,31 +4267,23 @@ public class SucursalService {
 	}
 
 	/* End Recibir OT en Sucursal */
-
-	public List<Indicador> listIndicadorSucursal(Ubicacion ubicacion)
-			throws Exception {
+	public List<Indicador> listIndicadorSucursal(Ubicacion ubicacion) throws Exception {
 		try {
 			FilterOT filter = new FilterOT();
 			filter.setSucursal(ubicacion.getId());
 			List<Indicador> indicadores = new ArrayList<Indicador>();
-			indicadores.add(new Indicador(
-					Constants.INDICADOR_OT_ABIERTAS_SUCURSAL, ordenTrabajoDAO
-							.getTotalOTAbiertasSucursal(filter)));
-			indicadores.add(new Indicador(
-					Constants.INDICADOR_OT_AUTORIZACION_CAMBIO, ordenTrabajoDAO
-							.getTotalOTAutorizadaCambio(filter)));
-			indicadores.add(new Indicador(
-					Constants.INDICADOR_OT_STL_SIN_CONTRATO, ordenTrabajoDAO
-							.getTotalOTEnviadasSTLSinContrato(filter)));
-			indicadores.add(new Indicador(
-					Constants.INDICADOR_OT_PENDIENTES_ACCESORIOS,
+			indicadores.add(new Indicador(Constants.INDICADOR_OT_ABIERTAS_SUCURSAL,
+					ordenTrabajoDAO.getTotalOTAbiertasSucursal(filter)));
+			indicadores.add(new Indicador(Constants.INDICADOR_OT_AUTORIZACION_CAMBIO,
+					ordenTrabajoDAO.getTotalOTAutorizadaCambio(filter)));
+			indicadores.add(new Indicador(Constants.INDICADOR_OT_STL_SIN_CONTRATO,
+					ordenTrabajoDAO.getTotalOTEnviadasSTLSinContrato(filter)));
+			indicadores.add(new Indicador(Constants.INDICADOR_OT_PENDIENTES_ACCESORIOS,
 					ordenTrabajoDAO.getTotalOTPendienteAccesorios(filter)));
-			indicadores.add(new Indicador(
-					Constants.INDICADOR_OT_PENDIENTES_ENTREGA_CLIENTE,
+			indicadores.add(new Indicador(Constants.INDICADOR_OT_PENDIENTES_ENTREGA_CLIENTE,
 					ordenTrabajoDAO.getTotalOTPendienteEntregaCliente(filter)));
-			indicadores.add(new Indicador(
-					Constants.INDICADOR_OT_PENDIENTES_GUIAS, ordenTrabajoDAO
-							.getTotalOTPendienteGuia(filter)));
+			indicadores.add(new Indicador(Constants.INDICADOR_OT_PENDIENTES_GUIAS,
+					ordenTrabajoDAO.getTotalOTPendienteGuia(filter)));
 			return indicadores;
 		} catch (Exception e) {
 			log.error(e, e);
@@ -3682,38 +4291,24 @@ public class SucursalService {
 		}
 	}
 
-	public ListRange listOTIndicadorSucursal(FilterIndicador filter,
-			GridControl gridControl, Ubicacion ubicacion) throws Exception {
+	public ListRange listOTIndicadorSucursal(FilterIndicador filter, GridControl gridControl, Ubicacion ubicacion)
+			throws Exception {
 		try {
 			ListRange listRange = new ListRange();
-			if (filter.getIdIndicador().equals(
-					Constants.INDICADOR_OT_ABIERTAS_SUCURSAL.longValue())) {
-				listRange = this.listOTAbiertasSucursal(new FilterOT(),
-						gridControl, ubicacion);
-			} else if (filter.getIdIndicador().equals(
-					Constants.INDICADOR_OT_PENDIENTES_ACCESORIOS.longValue())) {
-				listRange = this.listOTPendienteAccesorios(new FilterOT(),
-						gridControl, ubicacion);
-			} else if (filter.getIdIndicador().equals(
-					Constants.INDICADOR_OT_PENDIENTES_GUIAS.longValue())) {
-				listRange = this.listOTPendienteGuia(new FilterOT(),
-						gridControl, ubicacion);
-			} else if (filter.getIdIndicador().equals(
-					Constants.INDICADOR_OT_PENDIENTES_ENTREGA_CLIENTE
-							.longValue())) {
-				listRange = this.listOTPendienteEntregaCliente(new FilterOT(),
-						gridControl, ubicacion);
-			} else if (filter.getIdIndicador().equals(
-					Constants.INDICADOR_OT_STL_SIN_CONTRATO.longValue())) {
-				listRange = this.listOTEnviadasSTLSinContrato(new FilterOT(),
-						gridControl, ubicacion);
-			} else if (filter.getIdIndicador().equals(
-					Constants.INDICADOR_OT_AUTORIZACION_CAMBIO.longValue())) {
-				listRange = this.listOTAutorizadaCambio(new FilterOT(),
-						gridControl, ubicacion);
+			if (filter.getIdIndicador().equals(Constants.INDICADOR_OT_ABIERTAS_SUCURSAL.longValue())) {
+				listRange = this.listOTAbiertasSucursal(new FilterOT(), gridControl, ubicacion);
+			} else if (filter.getIdIndicador().equals(Constants.INDICADOR_OT_PENDIENTES_ACCESORIOS.longValue())) {
+				listRange = this.listOTPendienteAccesorios(new FilterOT(), gridControl, ubicacion);
+			} else if (filter.getIdIndicador().equals(Constants.INDICADOR_OT_PENDIENTES_GUIAS.longValue())) {
+				listRange = this.listOTPendienteGuia(new FilterOT(), gridControl, ubicacion);
+			} else if (filter.getIdIndicador().equals(Constants.INDICADOR_OT_PENDIENTES_ENTREGA_CLIENTE.longValue())) {
+				listRange = this.listOTPendienteEntregaCliente(new FilterOT(), gridControl, ubicacion);
+			} else if (filter.getIdIndicador().equals(Constants.INDICADOR_OT_STL_SIN_CONTRATO.longValue())) {
+				listRange = this.listOTEnviadasSTLSinContrato(new FilterOT(), gridControl, ubicacion);
+			} else if (filter.getIdIndicador().equals(Constants.INDICADOR_OT_AUTORIZACION_CAMBIO.longValue())) {
+				listRange = this.listOTAutorizadaCambio(new FilterOT(), gridControl, ubicacion);
 			} else {
-				throw new SSTException(
-						"Indicador inexistente para las sucursales");
+				throw new SSTException("Indicador inexistente para las sucursales");
 			}
 
 			return listRange;
@@ -3734,17 +4329,15 @@ public class SucursalService {
 		}
 	}
 
-	public ListRange listOTAbiertasSucursal(FilterOT filter,
-			GridControl gridControl, Ubicacion ubicacion) throws Exception {
+	public ListRange listOTAbiertasSucursal(FilterOT filter, GridControl gridControl, Ubicacion ubicacion)
+			throws Exception {
 		try {
 			ListRange listRange = new ListRange();
 			filter.setOrderBy(gridControl.getOrderBy());
 			filter.setSortOrder(gridControl.getSortOrder());
 			filter.setSucursal(ubicacion.getId());
-			listRange.setRows(ordenTrabajoDAO.listOTAbiertasSucursal(filter,
-					gridControl));
-			listRange.setTotal(ordenTrabajoDAO
-					.getTotalOTAbiertasSucursal(filter));
+			listRange.setRows(ordenTrabajoDAO.listOTAbiertasSucursal(filter, gridControl));
+			listRange.setTotal(ordenTrabajoDAO.getTotalOTAbiertasSucursal(filter));
 			return listRange;
 		} catch (Exception e) {
 			log.error(e, e);
@@ -3752,17 +4345,15 @@ public class SucursalService {
 		}
 	}
 
-	public ListRange listOTPendienteAccesorios(FilterOT filter,
-			GridControl gridControl, Ubicacion ubicacion) throws Exception {
+	public ListRange listOTPendienteAccesorios(FilterOT filter, GridControl gridControl, Ubicacion ubicacion)
+			throws Exception {
 		try {
 			ListRange listRange = new ListRange();
 			filter.setOrderBy(gridControl.getOrderBy());
 			filter.setSortOrder(gridControl.getSortOrder());
 			filter.setSucursal(ubicacion.getId());
-			listRange.setRows(ordenTrabajoDAO.listOTPendienteAccesorios(filter,
-					gridControl));
-			listRange.setTotal(ordenTrabajoDAO
-					.getTotalOTPendienteAccesorios(filter));
+			listRange.setRows(ordenTrabajoDAO.listOTPendienteAccesorios(filter, gridControl));
+			listRange.setTotal(ordenTrabajoDAO.getTotalOTPendienteAccesorios(filter));
 			return listRange;
 		} catch (Exception e) {
 			log.error(e, e);
@@ -3770,15 +4361,14 @@ public class SucursalService {
 		}
 	}
 
-	public ListRange listOTPendienteGuia(FilterOT filter,
-			GridControl gridControl, Ubicacion ubicacion) throws Exception {
+	public ListRange listOTPendienteGuia(FilterOT filter, GridControl gridControl, Ubicacion ubicacion)
+			throws Exception {
 		try {
 			ListRange listRange = new ListRange();
 			filter.setOrderBy(gridControl.getOrderBy());
 			filter.setSortOrder(gridControl.getSortOrder());
 			filter.setSucursal(ubicacion.getId());
-			listRange.setRows(ordenTrabajoDAO.listOTPendienteGuia(filter,
-					gridControl));
+			listRange.setRows(ordenTrabajoDAO.listOTPendienteGuia(filter, gridControl));
 			listRange.setTotal(ordenTrabajoDAO.getTotalOTPendienteGuia(filter));
 			return listRange;
 		} catch (Exception e) {
@@ -3787,63 +4377,56 @@ public class SucursalService {
 		}
 	}
 
-	public ListRange listOTPendienteEntregaCliente(FilterOT filter,
-			GridControl gridControl, Ubicacion ubicacion) throws Exception {
-		try {
-			ListRange listRange = new ListRange();
-			filter.setOrderBy(gridControl.getOrderBy());
-			filter.setSortOrder(gridControl.getSortOrder());
-			filter.setSucursal(ubicacion.getId());
-			listRange.setRows(ordenTrabajoDAO.listOTPendienteEntregaCliente(
-					filter, gridControl));
-			listRange.setTotal(ordenTrabajoDAO
-					.getTotalOTPendienteEntregaCliente(filter));
-			return listRange;
-		} catch (Exception e) {
-			log.error(e, e);
-			throw e;
-		}
-	}
-
-	public ListRange listOTEnviadasSTLSinContrato(FilterOT filter,
-			GridControl gridControl, Ubicacion ubicacion) throws Exception {
-		try {
-			ListRange listRange = new ListRange();
-			filter.setOrderBy(gridControl.getOrderBy());
-			filter.setSortOrder(gridControl.getSortOrder());
-			filter.setSucursal(ubicacion.getId());
-			listRange.setRows(ordenTrabajoDAO.listOTEnviadasSTLSinContrato(
-					filter, gridControl));
-			listRange.setTotal(ordenTrabajoDAO
-					.getTotalOTEnviadasSTLSinContrato(filter));
-			return listRange;
-		} catch (Exception e) {
-			log.error(e, e);
-			throw e;
-		}
-	}
-
-	public ListRange listOTAutorizadaCambio(FilterOT filter,
-			GridControl gridControl, Ubicacion ubicacion) throws Exception {
-		try {
-			ListRange listRange = new ListRange();
-			filter.setOrderBy(gridControl.getOrderBy());
-			filter.setSortOrder(gridControl.getSortOrder());
-			filter.setSucursal(ubicacion.getId());
-			listRange.setRows(ordenTrabajoDAO.listOTAutorizadaCambio(filter,
-					gridControl));
-			listRange.setTotal(ordenTrabajoDAO
-					.getTotalOTAutorizadaCambio(filter));
-			return listRange;
-		} catch (Exception e) {
-			log.error(e, e);
-			throw e;
-		}
-	}
-
-	public String updateClienteAceptaProducto(List<Accesorio> accesorios,
-			OrdenTrabajo ot, Usuario usuario, Ubicacion ubicacion)
+	public ListRange listOTPendienteEntregaCliente(FilterOT filter, GridControl gridControl, Ubicacion ubicacion)
 			throws Exception {
+		try {
+			ListRange listRange = new ListRange();
+			filter.setOrderBy(gridControl.getOrderBy());
+			filter.setSortOrder(gridControl.getSortOrder());
+			filter.setSucursal(ubicacion.getId());
+			listRange.setRows(ordenTrabajoDAO.listOTPendienteEntregaCliente(filter, gridControl));
+			listRange.setTotal(ordenTrabajoDAO.getTotalOTPendienteEntregaCliente(filter));
+			return listRange;
+		} catch (Exception e) {
+			log.error(e, e);
+			throw e;
+		}
+	}
+
+	public ListRange listOTEnviadasSTLSinContrato(FilterOT filter, GridControl gridControl, Ubicacion ubicacion)
+			throws Exception {
+		try {
+			ListRange listRange = new ListRange();
+			filter.setOrderBy(gridControl.getOrderBy());
+			filter.setSortOrder(gridControl.getSortOrder());
+			filter.setSucursal(ubicacion.getId());
+			listRange.setRows(ordenTrabajoDAO.listOTEnviadasSTLSinContrato(filter, gridControl));
+			listRange.setTotal(ordenTrabajoDAO.getTotalOTEnviadasSTLSinContrato(filter));
+			return listRange;
+		} catch (Exception e) {
+			log.error(e, e);
+			throw e;
+		}
+	}
+
+	public ListRange listOTAutorizadaCambio(FilterOT filter, GridControl gridControl, Ubicacion ubicacion)
+			throws Exception {
+		try {
+			ListRange listRange = new ListRange();
+			filter.setOrderBy(gridControl.getOrderBy());
+			filter.setSortOrder(gridControl.getSortOrder());
+			filter.setSucursal(ubicacion.getId());
+			listRange.setRows(ordenTrabajoDAO.listOTAutorizadaCambio(filter, gridControl));
+			listRange.setTotal(ordenTrabajoDAO.getTotalOTAutorizadaCambio(filter));
+			return listRange;
+		} catch (Exception e) {
+			log.error(e, e);
+			throw e;
+		}
+	}
+
+	public String updateClienteAceptaProducto(List<Accesorio> accesorios, OrdenTrabajo ot, Usuario usuario,
+			Ubicacion ubicacion) throws Exception {
 		try {
 			FilterOT filterAux = new FilterOT();
 			filterAux.setIdOT(ot.getId());
@@ -3858,7 +4441,8 @@ public class SucursalService {
 				accesorioDAO.updateUbicacionAccesorio(accesorio2);
 			}
 
-			// System.out.println("-----> El valor de la bandera viene: "+ot.getBanderaOrigenOT());
+			// System.out.println("-----> El valor de la bandera viene:
+			// "+ot.getBanderaOrigenOT());
 			ordenTrabajoDAO.updateOTBTNOrigen(ot);
 
 			if (ot.getCambioAutorizado()) {
@@ -3866,15 +4450,13 @@ public class SucursalService {
 				// a un segundo boton (generar ticket de cambio).
 				// this.updateOTCATicketCambio(ot, ubicacion);
 
-				ot.setEstado(estadoDAO
-						.getEstadoById(Constants.OT_CERRADA_POR_CLIENTE_POR_PRODUCTO_CAMBIADO));
+				ot.setEstado(estadoDAO.getEstadoById(Constants.OT_CERRADA_POR_CLIENTE_POR_PRODUCTO_CAMBIADO));
 
 				Guia guia = new Guia();
 				GuiaAccesorios guiaAccesorios = new GuiaAccesorios();
 
 				guia.setOrdenTrabajo(ot);
-				guia.setEstado(estadoDAO
-						.getEstadoById(Constants.GUIA_ESTADO_POR_EMITIR));
+				guia.setEstado(estadoDAO.getEstadoById(Constants.GUIA_ESTADO_POR_EMITIR));
 				guia.setOrigen(ubicacion);
 				guia.setTipoGuia(Constants.GUIA_TIPO_UNITARIA);
 				guia = guiaDAO.getGuiaByGuia(guia);
@@ -3903,10 +4485,10 @@ public class SucursalService {
 				gestion.setFecha(utilDAO.getDate());
 				gestion.setGestion("  cierra la orden de trabajo por cliente en la sucursal ");
 				gestionesDAO.saveGestion(gestion);
-				return "La orden de trabajo se cerró correctamente, debe imprimir la guía de despacho de accesorios (cargo), en 'OTs pendientes por guía";
+				return "La orden de trabajo se cerrï¿½ correctamente, debe imprimir la guï¿½a de despacho de accesorios (cargo), en 'OTs pendientes por guï¿½a";
 			} else {
-				ot.setEstado(estadoDAO
-						.getEstadoById(Constants.OT_CERRADA_POR_CLIENTE_EN_SUCURSAL_POR_PRODUCTO_REPARADO));
+				ot.setEstado(
+						estadoDAO.getEstadoById(Constants.OT_CERRADA_POR_CLIENTE_EN_SUCURSAL_POR_PRODUCTO_REPARADO));
 
 				Guia guia = new Guia();
 				guia.setOrdenTrabajo(ot);
@@ -3932,7 +4514,7 @@ public class SucursalService {
 				gestion.setFecha(utilDAO.getDate());
 				gestion.setGestion("  cierra la orden de trabajo por cliente en la sucursal ");
 				gestionesDAO.saveGestion(gestion);
-				return "La orden de trabajo se cerró correctamente, debe imprimir la guía de despacho de entrega al cliente, en 'OTs pendientes por guía'";
+				return "La orden de trabajo se cerrï¿½ correctamente, debe imprimir la guï¿½a de despacho de entrega al cliente, en 'OTs pendientes por guï¿½a'";
 			}
 		} catch (SSTException e) {
 			throw e;
@@ -3946,8 +4528,7 @@ public class SucursalService {
 		try {
 			Guia guia = new Guia();
 			guia.setOrdenTrabajo(ot);
-			guia.setEstado(estadoDAO
-					.getEstadoById(Constants.GUIA_ESTADO_POR_EMITIR));
+			guia.setEstado(estadoDAO.getEstadoById(Constants.GUIA_ESTADO_POR_EMITIR));
 			guia.setDestino(ubicacionDAO.get(Constants.UBICACION_ID_CLIENTE));
 			guia.setOrigen(ot.getUbicacion());
 			guia.setVigente(true);
@@ -3961,8 +4542,7 @@ public class SucursalService {
 		}
 	}
 
-	public void updateEnviarTareaEjecutiva(OrdenTrabajo ot, Usuario usuario)
-			throws Exception {
+	public void updateEnviarTareaEjecutiva(OrdenTrabajo ot, Usuario usuario) throws Exception {
 		try {
 			OrdenTrabajo otAux = ordenTrabajoDAO.getOTById(ot.getId());
 			Date fechaActual = utilDAO.getDate();
@@ -3991,62 +4571,46 @@ public class SucursalService {
 		}
 	}
 
-	public void updateEnviarTareaEjecutivaDesdeCD(Recepcion recepcion,
-			Ubicacion ubicacion, Usuario usuario, List<Parte> partes,
-			List<Accesorio> accesorios) throws Exception {
+	public void updateEnviarTareaEjecutivaDesdeCD(Recepcion recepcion, Ubicacion ubicacion, Usuario usuario,
+			List<Parte> partes, List<Accesorio> accesorios) throws Exception {
 		try {
-			Ubicacion ubicacionOT = ubicacionDAO.getUbicacionOT(recepcion
-					.getGuia().getOrdenTrabajo().getId());
-			OrdenTrabajo ordenTrabajo = ordenTrabajoDAO.getOTById(recepcion
-					.getGuia().getOrdenTrabajo().getId());
+			Ubicacion ubicacionOT = ubicacionDAO.getUbicacionOT(recepcion.getGuia().getOrdenTrabajo().getId());
+			OrdenTrabajo ordenTrabajo = ordenTrabajoDAO.getOTById(recepcion.getGuia().getOrdenTrabajo().getId());
 			this.updateParteOTConAnteriorObervacion(partes, usuario, ubicacion);
-			this.updateUbicacionAccesoriosRecibidos(ordenTrabajo, ubicacion,
-					recepcion.getOrigen(), accesorios);
+			this.updateUbicacionAccesoriosRecibidos(ordenTrabajo, ubicacion, recepcion.getOrigen(), accesorios);
 
 			updateOTTareaUrgente(ordenTrabajo);
 
 			Guia guiaRecibida = recepcion.getGuia();
-			if (guiaRecibida == null
-					&& ubicacionOT.getTipo().equals(
-							Constants.UBICACION_SERVICIO_TECNICO)) {
+			if (guiaRecibida == null && ubicacionOT.getTipo().equals(Constants.UBICACION_SERVICIO_TECNICO)) {
 				guiaRecibida = new Guia();
 				guiaRecibida.setOrigen(ubicacionOT);
 				guiaRecibida.setDestino(ubicacion);
 			}
-			guiaRecibida
-					.setEstado(estadoDAO
-							.getEstadoById(Constants.GUIA_ESTADO_EMITIDA_RECIBIDA_NO_REEMISION));
+			guiaRecibida.setEstado(estadoDAO.getEstadoById(Constants.GUIA_ESTADO_EMITIDA_RECIBIDA_NO_REEMISION));
 			guiaRecibida.setVigente(true);
 			guiaDAO.updateEstado(guiaRecibida);
 
 			Gestion gestion = new Gestion();
 			gestion.setOt(recepcion.getGuia().getOrdenTrabajo());
 			gestion.setUsuario(usuario);
-			gestion.setGestion("  rechaza la recepcion de la OT en "
-					+ ubicacion.getId() + " " + ubicacion.getNombre());
+			gestion.setGestion("  rechaza la recepcion de la OT en " + ubicacion.getId() + " " + ubicacion.getNombre());
 			gestionesDAO.saveGestion(gestion);
 
-			if (ubicacion.getTipo().equals(
-					Constants.UBICACION_CENTRO_DISTRIBUCION)) {
-				recepcion
-						.setEstado(estadoDAO
-								.getEstadoById(Constants.OT_ESTADO_CON_RECEPCION_RECHAZADA_EN_CENTRO_DE_DISTRIBUCION));
+			if (ubicacion.getTipo().equals(Constants.UBICACION_CENTRO_DISTRIBUCION)) {
+				recepcion.setEstado(
+						estadoDAO.getEstadoById(Constants.OT_ESTADO_CON_RECEPCION_RECHAZADA_EN_CENTRO_DE_DISTRIBUCION));
 			}
 			if (ubicacion.getTipo().equals(Constants.UBICACION_SUCURSAL)) {
-				recepcion
-						.setEstado(estadoDAO
-								.getEstadoById(Constants.OT_ESTADO_CON_RECEPCION_RECHAZADA_EN_SUCURSAL));
+				recepcion.setEstado(estadoDAO.getEstadoById(Constants.OT_ESTADO_CON_RECEPCION_RECHAZADA_EN_SUCURSAL));
 			} else {
-				recepcion
-						.setEstado(estadoDAO
-								.getEstadoById(Constants.OT_ESTADO_CON_RECEPCION_RECHAZADA_EN_BODEGA));
+				recepcion.setEstado(estadoDAO.getEstadoById(Constants.OT_ESTADO_CON_RECEPCION_RECHAZADA_EN_BODEGA));
 			}
 			recepcion.setUsuario(usuario);
 			recepcionDAO.saveRecepcionOT(recepcion);
 
 			Bitacora bitacora = bitacoraDAO.getByIdGuia(guiaRecibida.getId());
-			envioRecepcionService.recibirBitacora(recepcion.getOrigen(),
-					ubicacion, bitacora, ordenTrabajo, recepcion);
+			envioRecepcionService.recibirBitacora(recepcion.getOrigen(), ubicacion, bitacora, ordenTrabajo, recepcion);
 			ordenTrabajoDAO.updateOTRecepcion(ordenTrabajo);
 
 			Guia guiaNueva = new Guia();
@@ -4090,16 +4654,17 @@ public class SucursalService {
 		}
 	}
 
-	public void asignarDestinoAUbicacion(Ubicacion origen, Ubicacion destino)
-			throws Exception {
+	public void asignarDestinoAUbicacion(Ubicacion origen, Ubicacion destino) throws Exception {
 		try {
 			origen = ubicacionDAO.get(origen.getId());
 			destino = ubicacionDAO.get(destino.getId());
 
-			if (origen == null)
+			if (origen == null) {
 				throw new SSTException("La ubicacion de origen no existe");
-			if (destino == null)
+			}
+			if (destino == null) {
 				throw new SSTException("La ubicacion de destino no existe");
+			}
 
 			FilterDestino filter = new FilterDestino();
 			filter.setIdDestino(destino.getId());
@@ -4138,51 +4703,65 @@ public class SucursalService {
 			reglaPorFallaReiterada = this.getReglaComercialVigentePorFallaReiterada(producto, ubicacion);
 			reglaPorAutorizacionProveedor = this.getReglaComercialVigentePorAutorizacionProveedor(producto, ubicacion);
 			reglaPorCertificacionFalla = this.getReglaComercialVigentePorCertificacionFalla(producto, ubicacion);
-			
+
 			try {
 				reglaPorFallaFabricacion = this.getReglaComercialVigentePoFallaFabricacion(producto, ubicacion);
 			} catch (SSTException ignore) {
 			}
-			
-			//TODO Analizando regla comercial (plarrain)
-			/*System.out.println("-----> reglaPorValor: "+reglaPorValor);
-			System.out.println("-----> reglaPorFallaReiterada: "+reglaPorFallaReiterada);
-			System.out.println("-----> reglaPorAutorizacionProveedor: "+reglaPorAutorizacionProveedor);
-			System.out.println("-----> reglaPorCertificacionFalla: "+reglaPorCertificacionFalla);
-			System.out.println("-----> reglaPorFallaFabricacion: "+reglaPorFallaFabricacion);*/
-			
+
+			// TODO Analizando regla comercial (plarrain)
+			/*
+			 * System.out.println("-----> reglaPorValor: "+reglaPorValor);
+			 * System.out.println("-----> reglaPorFallaReiterada: "+reglaPorFallaReiterada);
+			 * System.out.println("-----> reglaPorAutorizacionProveedor: "
+			 * +reglaPorAutorizacionProveedor);
+			 * System.out.println("-----> reglaPorCertificacionFalla: "
+			 * +reglaPorCertificacionFalla);
+			 * System.out.println("-----> reglaPorFallaFabricacion: "
+			 * +reglaPorFallaFabricacion);
+			 */
 			if (reglaPorValor != null) {
 				reglaComercial.setCambioAutomatico(new ReglaCambioAutomatico());
-				reglaComercial.getCambioAutomatico().setPrecioLimite(reglaPorValor.getCambioAutomatico().getPrecioLimite());
+				reglaComercial.getCambioAutomatico()
+						.setPrecioLimite(reglaPorValor.getCambioAutomatico().getPrecioLimite());
 			}
 
 			if (reglaPorFallaReiterada != null) {
-				if (reglaComercial.getCambioAutomatico() == null)
+				if (reglaComercial.getCambioAutomatico() == null) {
 					reglaComercial.setCambioAutomatico(new ReglaCambioAutomatico());
-					reglaComercial.getCambioAutomatico().setDiasTope(reglaPorFallaReiterada.getCambioAutomatico().getDiasTope());
-					reglaComercial.getCambioAutomatico().setNumeroFallas(reglaPorFallaReiterada.getCambioAutomatico().getNumeroFallas());
+				}
+				reglaComercial.getCambioAutomatico()
+						.setDiasTope(reglaPorFallaReiterada.getCambioAutomatico().getDiasTope());
+				reglaComercial.getCambioAutomatico()
+						.setNumeroFallas(reglaPorFallaReiterada.getCambioAutomatico().getNumeroFallas());
 			}
-			
+
 			if (reglaPorFallaFabricacion != null) {
 				reglaComercial.setFallaFabricacion(new ReglaFallaFabricacion());
-				reglaComercial.getFallaFabricacion().setDiasTope(reglaPorFallaFabricacion.getFallaFabricacion().getDiasTope());
-				reglaComercial.getFallaFabricacion().setPrecioLimite(reglaPorFallaFabricacion.getFallaFabricacion().getPrecioLimite());
+				reglaComercial.getFallaFabricacion()
+						.setDiasTope(reglaPorFallaFabricacion.getFallaFabricacion().getDiasTope());
+				reglaComercial.getFallaFabricacion()
+						.setPrecioLimite(reglaPorFallaFabricacion.getFallaFabricacion().getPrecioLimite());
 			}
-			
+
 			if (reglaPorAutorizacionProveedor != null) {
 				reglaComercial.setReglaCambioProoveedor(new ReglaCambioProoveedor());
-				reglaComercial.getReglaCambioProoveedor().setAutorizadoProveedor(reglaPorAutorizacionProveedor.getReglaCambioProoveedor().getAutorizadoProveedor());
-				reglaComercial.getReglaCambioProoveedor().setNotaProoveedor(reglaPorAutorizacionProveedor.getReglaCambioProoveedor().getNotaProoveedor());
+				reglaComercial.getReglaCambioProoveedor().setAutorizadoProveedor(
+						reglaPorAutorizacionProveedor.getReglaCambioProoveedor().getAutorizadoProveedor());
+				reglaComercial.getReglaCambioProoveedor().setNotaProoveedor(
+						reglaPorAutorizacionProveedor.getReglaCambioProoveedor().getNotaProoveedor());
 			}
-			
+
 			if (reglaPorCertificacionFalla != null) {
 				reglaComercial.setCertificacionFalla(new ReglaCertificacionFalla());
-				reglaComercial.getCertificacionFalla().setInicio(reglaPorCertificacionFalla.getCertificacionFalla().getInicio());
-				reglaComercial.getCertificacionFalla().setTermino(reglaPorCertificacionFalla.getCertificacionFalla().getTermino());
+				reglaComercial.getCertificacionFalla()
+						.setInicio(reglaPorCertificacionFalla.getCertificacionFalla().getInicio());
+				reglaComercial.getCertificacionFalla()
+						.setTermino(reglaPorCertificacionFalla.getCertificacionFalla().getTermino());
 			}
-			
+
 			return reglaComercial;
-			
+
 		} catch (SSTException e) {
 			throw e;
 		} catch (Exception e) {
@@ -4191,8 +4770,8 @@ public class SucursalService {
 		}
 	}
 
-	public ReglaComercial getReglaComercialVigentePorAutorizacionProveedor(
-			Producto producto, Ubicacion ubicacion) throws Exception {
+	public ReglaComercial getReglaComercialVigentePorAutorizacionProveedor(Producto producto, Ubicacion ubicacion)
+			throws Exception {
 		try {
 			return this.getReglaComercialVigente(Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO, producto, ubicacion);
 		} catch (SSTException e) {
@@ -4203,8 +4782,7 @@ public class SucursalService {
 		}
 	}
 
-	public ReglaComercial getReglaComercialVigentePorValor(Producto producto,
-			Ubicacion ubicacion) throws Exception {
+	public ReglaComercial getReglaComercialVigentePorValor(Producto producto, Ubicacion ubicacion) throws Exception {
 		try {
 			return this.getReglaComercialVigente(Constants.CAMBIO_AUTOMATICO_VALOR, producto, ubicacion);
 		} catch (SSTException e) {
@@ -4215,10 +4793,10 @@ public class SucursalService {
 		}
 	}
 
-	public ReglaComercial getReglaComercialVigentePorFallaReiterada(
-			Producto producto, Ubicacion ubicacion) throws Exception {
+	public ReglaComercial getReglaComercialVigentePorFallaReiterada(Producto producto, Ubicacion ubicacion)
+			throws Exception {
 		try {
-			return this.getReglaComercialVigente(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA, producto,	ubicacion);
+			return this.getReglaComercialVigente(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA, producto, ubicacion);
 		} catch (SSTException e) {
 			throw e;
 		} catch (Exception e) {
@@ -4227,7 +4805,8 @@ public class SucursalService {
 		}
 	}
 
-	public ReglaComercial getReglaComercialVigentePoFallaFabricacion(Producto producto, Ubicacion ubicacion) throws Exception {
+	public ReglaComercial getReglaComercialVigentePoFallaFabricacion(Producto producto, Ubicacion ubicacion)
+			throws Exception {
 		try {
 			Familia familia = null;
 			FamiliaExcluida familiaExcluida = null;
@@ -4243,9 +4822,9 @@ public class SucursalService {
 			if (familiaExcluida != null) {
 				return null;
 			}
-			
+
 			return this.getReglaComercialVigente(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION, producto, ubicacion);
-			
+
 		} catch (SSTException e) {
 			throw e;
 		} catch (Exception e) {
@@ -4254,7 +4833,8 @@ public class SucursalService {
 		}
 	}
 
-	public ReglaComercial getReglaComercialVigentePorCertificacionFalla(Producto producto, Ubicacion ubicacion) throws Exception {
+	public ReglaComercial getReglaComercialVigentePorCertificacionFalla(Producto producto, Ubicacion ubicacion)
+			throws Exception {
 		try {
 			Familia familia = null;
 			FamiliaExcluida familiaExcluida = null;
@@ -4270,9 +4850,9 @@ public class SucursalService {
 			if (familiaExcluida != null) {
 				return null;
 			}
-			
+
 			return this.getReglaComercialVigente(Constants.CAMBIO_CERTIFICACION_FALLA, producto, ubicacion);
-			
+
 		} catch (SSTException e) {
 			throw e;
 		} catch (Exception e) {
@@ -4281,25 +4861,32 @@ public class SucursalService {
 		}
 	}
 
-	private ReglaComercial getReglaComercialVigente(String tipoAutorizacion,
-			Producto producto, Ubicacion ubicacion) throws Exception {
+	private ReglaComercial getReglaComercialVigente(String tipoAutorizacion, Producto producto, Ubicacion ubicacion)
+			throws Exception {
 		try {
 			ReglaComercial reglaComercial = null;
 
-			if (reglaComercial == null && ubicacion != null)
+			if (reglaComercial == null && ubicacion != null) {
 				reglaComercial = this.getReglaComercialVigentePorTienda(tipoAutorizacion, producto, ubicacion);
-			if (reglaComercial == null && ubicacion != null)
+			}
+			if (reglaComercial == null && ubicacion != null) {
 				reglaComercial = this.getReglaComercialVigentePorZona(tipoAutorizacion, producto, ubicacion);
-			if (reglaComercial == null && producto != null)
+			}
+			if (reglaComercial == null && producto != null) {
 				reglaComercial = this.getReglaComercialVigentePorProducto(tipoAutorizacion, producto, ubicacion);
-			if (reglaComercial == null && producto != null)
+			}
+			if (reglaComercial == null && producto != null) {
 				reglaComercial = this.getReglaComercialVigentePorFamilia(tipoAutorizacion, producto, ubicacion);
-			if (reglaComercial == null && producto != null)
+			}
+			if (reglaComercial == null && producto != null) {
 				reglaComercial = this.getReglaComercialVigentePorLinea(tipoAutorizacion, producto, ubicacion);
-			if (reglaComercial == null && producto != null)
+			}
+			if (reglaComercial == null && producto != null) {
 				reglaComercial = this.getReglaComercialVigenteCertificacionFalla(tipoAutorizacion, producto, ubicacion);
-			if (reglaComercial == null)
+			}
+			if (reglaComercial == null) {
 				reglaComercial = this.getReglaComercialVigenteGeneral(tipoAutorizacion, producto, ubicacion);
+			}
 
 			return reglaComercial;
 		} catch (SSTException e) {
@@ -4310,35 +4897,30 @@ public class SucursalService {
 		}
 	}
 
-	private ReglaComercial getReglaComercialVigenteCertificacionFalla(
-			String tipoAutorizacion, Producto producto, Ubicacion ubicacion)
-			throws Exception {
+	private ReglaComercial getReglaComercialVigenteCertificacionFalla(String tipoAutorizacion, Producto producto,
+			Ubicacion ubicacion) throws Exception {
 		try {
 			FilterRegla filterRegla = new FilterRegla();
 			filterRegla.setIdTipoAutorizacion(tipoAutorizacion);
-			return reglaComercialDAO
-					.getReglaComercialVigenteByFilter(filterRegla);
+			return reglaComercialDAO.getReglaComercialVigenteByFilter(filterRegla);
 		} catch (Exception e) {
 			throw e;
 		}
 	}
 
-	private ReglaComercial getReglaComercialVigenteGeneral(
-			String tipoAutorizacion, Producto producto, Ubicacion ubicacion)
-			throws Exception {
+	private ReglaComercial getReglaComercialVigenteGeneral(String tipoAutorizacion, Producto producto,
+			Ubicacion ubicacion) throws Exception {
 		try {
 			FilterRegla filterRegla = new FilterRegla();
 			filterRegla.setIdTipoAutorizacion(tipoAutorizacion);
-			return reglaComercialDAO
-					.getReglaComercialVigenteByFilter(filterRegla);
+			return reglaComercialDAO.getReglaComercialVigenteByFilter(filterRegla);
 		} catch (Exception e) {
 			throw e;
 		}
 	}
 
-	private ReglaComercial getReglaComercialVigentePorTienda(
-			String tipoAutorizacion, Producto producto, Ubicacion ubicacion)
-			throws Exception {
+	private ReglaComercial getReglaComercialVigentePorTienda(String tipoAutorizacion, Producto producto,
+			Ubicacion ubicacion) throws Exception {
 		try {
 			FilterRegla filterRegla = new FilterRegla();
 			filterRegla.setIdTipoAutorizacion(tipoAutorizacion);
@@ -4349,9 +4931,8 @@ public class SucursalService {
 		}
 	}
 
-	private ReglaComercial getReglaComercialVigentePorZona(
-			String tipoAutorizacion, Producto producto, Ubicacion ubicacion)
-			throws Exception {
+	private ReglaComercial getReglaComercialVigentePorZona(String tipoAutorizacion, Producto producto,
+			Ubicacion ubicacion) throws Exception {
 		try {
 			FilterRegla filterRegla = new FilterRegla();
 			Zona zona = zonaDAO.getByIdUbicacion(ubicacion.getId());
@@ -4360,30 +4941,26 @@ public class SucursalService {
 			}
 			filterRegla.setIdTipoAutorizacion(tipoAutorizacion);
 			filterRegla.setIdZona(zona.getId());
-			return reglaComercialDAO
-					.getReglaComercialVigenteByFilter(filterRegla);
+			return reglaComercialDAO.getReglaComercialVigenteByFilter(filterRegla);
 		} catch (Exception e) {
 			throw e;
 		}
 	}
 
-	private ReglaComercial getReglaComercialVigentePorProducto(
-			String tipoAutorizacion, Producto producto, Ubicacion ubicacion)
-			throws Exception {
+	private ReglaComercial getReglaComercialVigentePorProducto(String tipoAutorizacion, Producto producto,
+			Ubicacion ubicacion) throws Exception {
 		try {
 			FilterRegla filterRegla = new FilterRegla();
 			filterRegla.setIdTipoAutorizacion(tipoAutorizacion);
 			filterRegla.setIdProducto(producto.getId().longValue());
-			return reglaComercialDAO
-					.getReglaComercialVigenteByFilter(filterRegla);
+			return reglaComercialDAO.getReglaComercialVigenteByFilter(filterRegla);
 		} catch (Exception e) {
 			throw e;
 		}
 	}
 
-	private ReglaComercial getReglaComercialVigentePorFamilia(
-			String tipoAutorizacion, Producto producto, Ubicacion ubicacion)
-			throws Exception {
+	private ReglaComercial getReglaComercialVigentePorFamilia(String tipoAutorizacion, Producto producto,
+			Ubicacion ubicacion) throws Exception {
 		try {
 			FilterRegla filterRegla = new FilterRegla();
 			Familia familia = familiaDAO.getByIdProducto(producto.getId());
@@ -4392,16 +4969,14 @@ public class SucursalService {
 			}
 			filterRegla.setIdTipoAutorizacion(tipoAutorizacion);
 			filterRegla.setIdFamilia(familia.getId());
-			return reglaComercialDAO
-					.getReglaComercialVigenteByFilter(filterRegla);
+			return reglaComercialDAO.getReglaComercialVigenteByFilter(filterRegla);
 		} catch (Exception e) {
 			throw e;
 		}
 	}
 
-	private ReglaComercial getReglaComercialVigentePorLinea(
-			String tipoAutorizacion, Producto producto, Ubicacion ubicacion)
-			throws Exception {
+	private ReglaComercial getReglaComercialVigentePorLinea(String tipoAutorizacion, Producto producto,
+			Ubicacion ubicacion) throws Exception {
 		try {
 			FilterRegla filterRegla = new FilterRegla();
 			Familia familia = familiaDAO.getByIdProducto(producto.getId());
@@ -4414,62 +4989,52 @@ public class SucursalService {
 			}
 			filterRegla.setIdTipoAutorizacion(tipoAutorizacion);
 			filterRegla.setIdLinea(linea.getCodigo());
-			return reglaComercialDAO
-					.getReglaComercialVigenteByFilter(filterRegla);
+			return reglaComercialDAO.getReglaComercialVigenteByFilter(filterRegla);
 		} catch (Exception e) {
 			throw e;
 		}
 	}
 
-	public Usuario autorizacionTipo(FilterTipoCambio filter, String ip,
-			Ubicacion ubicacion, Date hoy) throws Exception {
+	public Usuario autorizacionTipo(FilterTipoCambio filter, String ip, Ubicacion ubicacion, Date hoy)
+			throws Exception {
 		try {
 			filter.setIp(ip);
 			filter.setUbicacion(ubicacion);
 			filter.setFechaActual(hoy);
-			//login productivo
-			filter.setUsuario(loginService.login(filter.getUsuario(),filter.getIp()));
-			//login Falso
-			//System.out.println("Inicia Login Simulado");
-			//filter.setUsuario(loginService.fullLogin(filter.getUsuario(),filter.getUbicacion(),filter.getIp()));
-			List<Rol> roles = administracionService.listRolesByUsuario(filter
-					.getUsuario());
+			// login productivo
+			filter.setUsuario(loginService.login(filter.getUsuario(), filter.getIp()));
+			// login Falso
+			// System.out.println("Inicia Login Simulado");
+			// filter.setUsuario(loginService.fullLogin(filter.getUsuario(),filter.getUbicacion(),filter.getIp()));
+			List<Rol> roles = administracionService.listRolesByUsuario(filter.getUsuario());
 
 			Boolean isJefeTienda = false;
 			for (Rol rol : roles) {
-				if (rol.getId().equals(
-						(Constants.ROL_JEFE_DE_TIENDA).longValue())) {
+				if (rol.getId().equals((Constants.ROL_JEFE_DE_TIENDA).longValue())) {
 					isJefeTienda = true;
 				}
 			}
 
 			// TODO Se debe descomentar las siguientes lineas (plarrain)
-			if(!isJefeTienda){
-				throw new SSTException("El usuario no tiene permisos para autorizar el cambio"
-			); }
-			 
+			if (!isJefeTienda) {
+				throw new SSTException("El usuario no tiene permisos para autorizar el cambio");
+			}
 
-			filter.setDocumento(documentoDAO.getDocumentoByIdAndTipo(filter
-					.getDocumento()));
-			List<Producto> productos = productoDAO
-					.listProductoByTipoDocumentoAndIdDocumento(filter
-							.getDocumento());
+			filter.setDocumento(documentoDAO.getDocumentoByIdAndTipo(filter.getDocumento()));
+			List<Producto> productos = productoDAO.listProductoByTipoDocumentoAndIdDocumento(filter.getDocumento());
 			for (Producto prod : productos) {
 				if (prod.getId().equals(filter.getProducto().getId())) {
 					filter.setProducto(prod);
 				}
 			}
 
-			filter.setReglaComercial(getReglaComercialCompleta(
-					filter.getProducto(), filter.getUbicacion()));
+			filter.setReglaComercial(getReglaComercialCompleta(filter.getProducto(), filter.getUbicacion()));
 
-			if (filter.getMotivo().equals(
-					Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION)) {
+			if (filter.getMotivo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION)) {
 				if (validarFallaFabricacionJT(filter)) {
 					return filter.getUsuario();
 				}
-			} else if (filter.getMotivo().equals(
-					Constants.CAMBIO_AUTOMATICO_VALOR)) {
+			} else if (filter.getMotivo().equals(Constants.CAMBIO_AUTOMATICO_VALOR)) {
 				if (validarCambioPorValorJT(filter)) {
 					return filter.getUsuario();
 				}
@@ -4487,24 +5052,23 @@ public class SucursalService {
 		}
 	}
 
-	private Boolean validarFallaFabricacionJT(FilterTipoCambio filter)
-			throws Exception {
+	private Boolean validarFallaFabricacionJT(FilterTipoCambio filter) throws Exception {
 		try {
-			if (filter.getReglaComercial().getFallaFabricacion() != null && filter.getReglaComercial().getFallaFabricacion().getPrecioLimite() != null) {
+			if (filter.getReglaComercial().getFallaFabricacion() != null
+					&& filter.getReglaComercial().getFallaFabricacion().getPrecioLimite() != null) {
 				Calendar fechaDiasFF = Calendar.getInstance();
 				fechaDiasFF.setTime(filter.getDocumento().getFechaEmision());
 				fechaDiasFF.add(Calendar.DAY_OF_YEAR, filter.getReglaComercial().getFallaFabricacion().getDiasTope());
 				Calendar fechaActual = Calendar.getInstance();
 				fechaActual.setTime(filter.getFechaActual());
-				if (fechaDiasFF.before(fechaActual) || filter.getProducto().getPrecioVenta() > filter.getReglaComercial().getFallaFabricacion().getPrecioLimite()) {
+				if (fechaDiasFF.before(fechaActual) || filter.getProducto().getPrecioVenta() > filter
+						.getReglaComercial().getFallaFabricacion().getPrecioLimite()) {
 					return true;
 				} else {
-					throw new SSTException(
-							"No es posible realizar un cambio por Falla de Fabricacion");
+					throw new SSTException("No es posible realizar un cambio por Falla de Fabricacion");
 				}
 			} else {
-				throw new SSTException(
-						"El producto no tiene regla comercial para falla de fabricacion");
+				throw new SSTException("El producto no tiene regla comercial para falla de fabricacion");
 			}
 		} catch (SSTException e) {
 			throw e;
@@ -4514,11 +5078,13 @@ public class SucursalService {
 		}
 	}
 
-	private Boolean validarCambioPorValorJT(FilterTipoCambio filter)
-			throws Exception {
+	private Boolean validarCambioPorValorJT(FilterTipoCambio filter) throws Exception {
 		try {
-			//System.out.println("-----> validarCambioPorValorJT: "+filter.getProducto().getPrecioVenta()+" > "+filter.getReglaComercial().getCambioAutomatico().getPrecioLimite());
-			if (filter.getProducto().getPrecioVenta() < filter.getReglaComercial().getCambioAutomatico().getPrecioLimite()) {
+			// System.out.println("-----> validarCambioPorValorJT:
+			// "+filter.getProducto().getPrecioVenta()+" >
+			// "+filter.getReglaComercial().getCambioAutomatico().getPrecioLimite());
+			if (filter.getProducto().getPrecioVenta() < filter.getReglaComercial().getCambioAutomatico()
+					.getPrecioLimite()) {
 				return true;
 			} else {
 				throw new SSTException(
@@ -4532,8 +5098,7 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean isCambioPorValor(FilterTipoCambio filter, Ubicacion ubicacion)
-			throws Exception {
+	public Boolean isCambioPorValor(FilterTipoCambio filter, Ubicacion ubicacion) throws Exception {
 		try {
 			return isCambioPorValor(filter.getProducto(), ubicacion);
 		} catch (SSTException e) {
@@ -4543,15 +5108,14 @@ public class SucursalService {
 			throw e;
 		}
 	}
-	
-	public Boolean isCambioPorValor(Producto producto, Ubicacion ubicacion)
-			throws Exception {
-		try {
-			ReglaComercial reglaComercial = getReglaComercialCompleta(producto,
-					ubicacion);
 
-			if (reglaComercial == null || reglaComercial.getCambioAutomatico() == null)
+	public Boolean isCambioPorValor(Producto producto, Ubicacion ubicacion) throws Exception {
+		try {
+			ReglaComercial reglaComercial = getReglaComercialCompleta(producto, ubicacion);
+
+			if (reglaComercial == null || reglaComercial.getCambioAutomatico() == null) {
 				return false;
+			}
 
 			return isCambioPorValor(producto, reglaComercial);
 		} catch (SSTException e) {
@@ -4562,15 +5126,12 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean isCambioPorValor(Producto producto,
-			ReglaComercial reglaComercial) throws Exception {
+	public Boolean isCambioPorValor(Producto producto, ReglaComercial reglaComercial) throws Exception {
 		try {
-			if (producto.getPrecioVenta() > reglaComercial
-					.getCambioAutomatico().getPrecioLimite())
-				throw new SSTException(
-						"Precio del producto es mayor al precio limite de $"
-								+ reglaComercial.getCambioAutomatico()
-										.getPrecioLimite());
+			if (producto.getPrecioVenta() > reglaComercial.getCambioAutomatico().getPrecioLimite()) {
+				throw new SSTException("Precio del producto es mayor al precio limite de $"
+						+ reglaComercial.getCambioAutomatico().getPrecioLimite());
+			}
 			return true;
 		} catch (SSTException e) {
 			throw e;
@@ -4580,11 +5141,9 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean isCambioPorAutorizacionProveedor(FilterTipoCambio filter,
-			Ubicacion ubicacion) throws Exception {
+	public Boolean isCambioPorAutorizacionProveedor(FilterTipoCambio filter, Ubicacion ubicacion) throws Exception {
 		try {
-			return isCambioPorAutorizacionProveedor(filter.getProducto(),
-					ubicacion);
+			return isCambioPorAutorizacionProveedor(filter.getProducto(), ubicacion);
 		} catch (SSTException e) {
 			throw e;
 		} catch (Exception e) {
@@ -4593,15 +5152,13 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean isCambioPorAutorizacionProveedor(Producto producto,
-			Ubicacion ubicacion) throws Exception {
+	public Boolean isCambioPorAutorizacionProveedor(Producto producto, Ubicacion ubicacion) throws Exception {
 		try {
-			ReglaComercial reglaComercial = getReglaComercialCompleta(producto,
-					ubicacion);
+			ReglaComercial reglaComercial = getReglaComercialCompleta(producto, ubicacion);
 
-			if (reglaComercial == null
-					|| reglaComercial.getReglaCambioProoveedor() == null)
+			if (reglaComercial == null || reglaComercial.getReglaCambioProoveedor() == null) {
 				return false;
+			}
 
 			return isCambioPorAutorizacionProveedor(producto, reglaComercial);
 		} catch (SSTException e) {
@@ -4613,86 +5170,78 @@ public class SucursalService {
 	}
 
 	// TODO 24
-	public Boolean isCambioPor24h(Producto producto, Ubicacion ubicacion)
-			throws Exception {
-		
-		//TODO Se modifico comparacion de fechas (plarrain)
-		SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy HH:mm"); 
+	public Boolean isCambioPor24h(Producto producto, Ubicacion ubicacion) throws Exception {
+
+		// TODO Se modifico comparacion de fechas (plarrain)
+		SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy HH:mm");
 
 		Date fechaCreacion = sdf.parse(dateParseString(producto.getFechaEntrega()), new ParsePosition(0));
 		Date fechaActual = sdf.parse(dateParseString(new Date()), new ParsePosition(0));
-		int dias=(int) ((fechaCreacion.getTime()-fechaActual.getTime())/86400000);
-		//System.out.println("-----> fechaCreacion v/s fechaActual: "+fechaCreacion +" v/s "+ fechaActual);
-		//System.out.println(fechaCreacion.compareTo(fechaActual));
-		if (dias>=0){//fechaCreacion.before(fechaActual) ){
-			//System.out.println("-----> Cambio Menor de 24 horas.");
+		int dias = (int) ((fechaCreacion.getTime() - fechaActual.getTime()) / 86400000);
+		// System.out.println("-----> fechaCreacion v/s fechaActual: "+fechaCreacion +"
+		// v/s "+ fechaActual);
+		// System.out.println(fechaCreacion.compareTo(fechaActual));
+		if (dias >= 0) {// fechaCreacion.before(fechaActual) ){
+			// System.out.println("-----> Cambio Menor de 24 horas.");
 			return true;
 		}
-		/*if (fechaCreacion.compareTo(fechaActual) > 0){//fechaCreacion.before(fechaActual) ){
-			//System.out.println("-----> Cambio Menor de 24 horas.");
-			return true;
-		}*/
+		/*
+		 * if (fechaCreacion.compareTo(fechaActual) >
+		 * 0){//fechaCreacion.before(fechaActual) ){
+		 * //System.out.println("-----> Cambio Menor de 24 horas."); return true; }
+		 */
 		return false;
-		
-		/*Date fechaCreacion = producto.getFechaEntrega();
-		Calendar cal = Calendar.getInstance();
-		cal.setTime(fechaCreacion);
-		int diaTope = cal.get(Calendar.DATE) + 2;
-		Calendar fechaActual = Calendar.getInstance();
-		int diaActual = fechaActual.get(Calendar.DATE);
-		
-		System.out.println("-----> diaActual < diaTope: "+diaActual +" < "+ diaTope);
-		if (diaActual < diaTope) {
-			System.out.println("-----> Cambio Menor de 24 horas.");
-			return true;
-		}
-		return false;*/
+
+		/*
+		 * Date fechaCreacion = producto.getFechaEntrega(); Calendar cal =
+		 * Calendar.getInstance(); cal.setTime(fechaCreacion); int diaTope =
+		 * cal.get(Calendar.DATE) + 2; Calendar fechaActual = Calendar.getInstance();
+		 * int diaActual = fechaActual.get(Calendar.DATE);
+		 * 
+		 * System.out.println("-----> diaActual < diaTope: "+diaActual +" < "+ diaTope);
+		 * if (diaActual < diaTope) {
+		 * System.out.println("-----> Cambio Menor de 24 horas."); return true; } return
+		 * false;
+		 */
 	}
-	
+
 	public String dateParseString(Date fechaConvertir) {
 
-		DateFormat fechaHora = new SimpleDateFormat("dd-MM-yyyy HH:mm"); //SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		DateFormat fechaHora = new SimpleDateFormat("dd-MM-yyyy HH:mm"); // SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		String convertido = fechaHora.format(fechaConvertir);
-		//System.out.println("-----> La fecha convertida a String va: "+convertido);
+		// System.out.println("-----> La fecha convertida a String va: "+convertido);
 		return convertido;
 	}
 
-	public Boolean isCambioPorAutorizacionProveedor(Producto producto,
-			ReglaComercial reglaComercial) throws Exception {
+	public Boolean isCambioPorAutorizacionProveedor(Producto producto, ReglaComercial reglaComercial) throws Exception {
 		try {
-			return reglaComercial.getReglaCambioProoveedor()
-					.getAutorizadoProveedor();
+			return reglaComercial.getReglaCambioProoveedor().getAutorizadoProveedor();
 		} catch (Exception e) {
 			log.error(e, e);
 			throw e;
 		}
 	}
 
-	private Boolean validarFallaReiteradaJT(FilterTipoCambio filter)
-			throws Exception {
+	private Boolean validarFallaReiteradaJT(FilterTipoCambio filter) throws Exception {
 		try {
 			FilterOT filterOT = new FilterOT();
 			filterOT.setNumeroSerie(filter.getNumeroSerie());
 			filterOT.setContratoEmitido(true);
-			List<OrdenTrabajo> oTs = ordenTrabajoDAO
-					.listOTbyNumeroSerie(filterOT);
+			List<OrdenTrabajo> oTs = ordenTrabajoDAO.listOTbyNumeroSerie(filterOT);
 
 			// OrdenTrabajo ot = oTs.get(0);
 			Calendar fechaActual = Calendar.getInstance();
 			fechaActual.setTime(filter.getFechaActual());
 
 			Calendar fechaFallaReiterada = Calendar.getInstance();
-			fechaFallaReiterada
-					.setTime(filter.getDocumento().getFechaEmision());
+			fechaFallaReiterada.setTime(filter.getDocumento().getFechaEmision());
 			// fechaFallaReiterada.add(Calendar.DAY_OF_YEAR,filter.getReglaComercial().getCambioAutomatico().getDiasTope());
 
-			if ((oTs.size() + 1) >= filter.getReglaComercial()
-					.getCambioAutomatico().getNumeroFallas()) {
+			if ((oTs.size() + 1) >= filter.getReglaComercial().getCambioAutomatico().getNumeroFallas()) {
 				if (fechaFallaReiterada.before(fechaActual)) {
 					return true;
 				} else {
-					throw new SSTException(
-							"La fecha es menor a la fecha limite");
+					throw new SSTException("La fecha es menor a la fecha limite");
 				}
 			} else {
 				throw new SSTException("El numero de fallas es menor al limite");
@@ -4705,8 +5254,7 @@ public class SucursalService {
 		}
 	}
 
-	public List<Guia> listGuiaDocumentoProductoByDocumento(Documento documento)
-			throws Exception {
+	public List<Guia> listGuiaDocumentoProductoByDocumento(Documento documento) throws Exception {
 		try {
 			return guiaDAO.listGuiaDocumentoProductoByDocumento(documento);
 		} catch (Exception e) {
@@ -4715,14 +5263,12 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean getCrearNotaCredito(Documento documento, Date hoy)
-			throws Exception {
+	public Boolean getCrearNotaCredito(Documento documento, Date hoy) throws Exception {
 		try {
 			documento = documentoDAO.getDocumentoByIdAndTipo(documento);
 
 			if (documento == null) {
-				throw new SSTException(
-						"El documento asociado a esta Orden de trabajo no existe en la Base de Datos");
+				throw new SSTException("El documento asociado a esta Orden de trabajo no existe en la Base de Datos");
 			}
 
 			Calendar fechaActual = Calendar.getInstance();
@@ -4731,8 +5277,7 @@ public class SucursalService {
 			Calendar fechaLimite = Calendar.getInstance();
 			fechaLimite.setTime(documento.getFechaEmision());
 
-			fechaLimite.add(Calendar.DAY_OF_YEAR,
-					notaCreidtoDAO.getDiasNotaCredito());
+			fechaLimite.add(Calendar.DAY_OF_YEAR, notaCreidtoDAO.getDiasNotaCredito());
 
 			if (fechaLimite.after(fechaActual)) {
 				return true;
@@ -4758,14 +5303,18 @@ public class SucursalService {
 
 	public Boolean validarFallaReiterada(OrdenTrabajo oT, Ubicacion sucursal, Date hoy) throws Exception {
 		try {
-			if ((oT.getTipoCambio() != null && oT.getTipoCambio().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA)) || (oT.getTipoCambioJT() != null && oT.getTipoCambioJT()	.getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA))) {
+			if ((oT.getTipoCambio() != null
+					&& oT.getTipoCambio().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA))
+					|| (oT.getTipoCambioJT() != null
+							&& oT.getTipoCambioJT().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA))) {
 				return false;
 			}
 			oT.setProducto(productoDAO.getProductoById(oT.getProducto().getId()));
 
 			ReglaComercial regla = getReglaComercialCompleta(oT.getProducto(), sucursal);
 
-			if (regla == null || regla.getCambioAutomatico() == null || regla.getCambioAutomatico().getDiasTope() == null) {
+			if (regla == null || regla.getCambioAutomatico() == null
+					|| regla.getCambioAutomatico().getDiasTope() == null) {
 				return false;
 			}
 
@@ -4776,15 +5325,17 @@ public class SucursalService {
 			filter.setSortOrder("asc");
 			filter.setIdDocumento(oT.getIdDocumento().longValue());
 			filter.setCerradaCliente(true);
-			filter.setImei(oT.getImei()); //TODO Esto estaba comentado, se descomenta para realizar pruebas. (plarrain)
+			filter.setImei(oT.getImei()); // TODO Esto estaba comentado, se descomenta para realizar pruebas. (plarrain)
 			filter.setCalificaFR(true);
 
 			List<OrdenTrabajo> oTs = ordenTrabajoDAO.listByFilter(filter);
-			
-			/*System.out.println("-----> oTs.isEmpty(): "+oTs.isEmpty());
-			System.out.println("-----> oTs.size() + 1: "+oTs.size() + 1);
-			System.out.println("-----> regla.getCambioAutomatico().getNumeroFallas(): "+regla.getCambioAutomatico().getNumeroFallas());*/
-			
+
+			/*
+			 * System.out.println("-----> oTs.isEmpty(): "+oTs.isEmpty());
+			 * System.out.println("-----> oTs.size() + 1: "+oTs.size() + 1);
+			 * System.out.println("-----> regla.getCambioAutomatico().getNumeroFallas(): "
+			 * +regla.getCambioAutomatico().getNumeroFallas());
+			 */
 			if (oTs.isEmpty() || (oTs.size() + 1) < regla.getCambioAutomatico().getNumeroFallas()) {
 				return false;
 			} else {
@@ -4794,14 +5345,14 @@ public class SucursalService {
 					return false;
 				}
 				fechaLimite.setTime(ultimaOT.getFechaCierreCliente());
-				fechaLimite.add(Calendar.DAY_OF_YEAR, regla
-						.getCambioAutomatico().getDiasTope());
+				fechaLimite.add(Calendar.DAY_OF_YEAR, regla.getCambioAutomatico().getDiasTope());
 				Calendar fechaActual = Calendar.getInstance();
 				fechaActual.setTime(hoy);
-				
-				/*System.out.println("-----> fechaLimite: "+fechaLimite);
-				System.out.println("-----> fechaActual: "+fechaActual);*/
-				
+
+				/*
+				 * System.out.println("-----> fechaLimite: "+fechaLimite);
+				 * System.out.println("-----> fechaActual: "+fechaActual);
+				 */
 				if (fechaLimite.after(fechaActual)) {
 					return true;
 				} else {
@@ -4815,51 +5366,48 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean isCambioPorFallaFabricacion(Producto producto,
-			Documento documento, Ubicacion ubicacion) throws Exception {
+	public Boolean isCambioPorFallaFabricacion(Producto producto, Documento documento, Ubicacion ubicacion)
+			throws Exception {
 		try {
-			ReglaComercial reglaComercial = getReglaComercialCompleta(producto,
-					ubicacion);
+			ReglaComercial reglaComercial = getReglaComercialCompleta(producto, ubicacion);
 
 			if (reglaComercial.getCertificacionFalla() == null) {
 				return false;
 			}
-			
-			/*Date fechaActual = utilDAO.getDate();
-			Calendar fechaLimite = Calendar.getInstance();
-			fechaLimite.setTime(documento.getFechaEmision());
-			fechaLimite.add(Calendar.DAY_OF_YEAR, reglaComercial
-					.getFallaFabricacion().getDiasTope() + 1);
 
-			if (fechaActual.before(fechaLimite.getTime())) {
-				return true;
-			} else {
-				return false;
-			}*/
-			
+			/*
+			 * Date fechaActual = utilDAO.getDate(); Calendar fechaLimite =
+			 * Calendar.getInstance(); fechaLimite.setTime(documento.getFechaEmision());
+			 * fechaLimite.add(Calendar.DAY_OF_YEAR, reglaComercial
+			 * .getFallaFabricacion().getDiasTope() + 1);
+			 * 
+			 * if (fechaActual.before(fechaLimite.getTime())) { return true; } else { return
+			 * false; }
+			 */
 			Date fechaActual = new Date();
 			// SimpleDateFormat formateador = new
 			// SimpleDateFormat("dd/MM/yyyy");
 			// Date fechaEmision = formateador.parse(fecha);
 
 			long MILISEGUNDOS_EN_UN_DIA = 1000 * 60 * 60 * 24;
-			long dias = (fechaActual.getTime() - documento.getFechaEmision()
-					.getTime()) / MILISEGUNDOS_EN_UN_DIA;
-			
-			/*System.out.println(fechaActual.getTime() + " - " + documento.getFechaEmision()
-					.getTime() + "/" + MILISEGUNDOS_EN_UN_DIA);
-			System.out.println("dias: " + dias);
-			System.out.println("reglaComercial.getCertificacionFalla().getInicio(): " + reglaComercial.getCertificacionFalla().getInicio());
-			System.out.println("reglaComercial.getCertificacionFalla().getTermino(): " + reglaComercial.getCertificacionFalla().getTermino());*/
-			
+			long dias = (fechaActual.getTime() - documento.getFechaEmision().getTime()) / MILISEGUNDOS_EN_UN_DIA;
+
+			/*
+			 * System.out.println(fechaActual.getTime() + " - " +
+			 * documento.getFechaEmision() .getTime() + "/" + MILISEGUNDOS_EN_UN_DIA);
+			 * System.out.println("dias: " + dias);
+			 * System.out.println("reglaComercial.getCertificacionFalla().getInicio(): " +
+			 * reglaComercial.getCertificacionFalla().getInicio());
+			 * System.out.println("reglaComercial.getCertificacionFalla().getTermino(): " +
+			 * reglaComercial.getCertificacionFalla().getTermino());
+			 */
 			if (dias >= reglaComercial.getCertificacionFalla().getInicio()
-					&& dias <= reglaComercial.getCertificacionFalla()
-							.getTermino()) {
+					&& dias <= reglaComercial.getCertificacionFalla().getTermino()) {
 				return true;
 			} else {
 				return false;
 			}
-			
+
 		} catch (SSTException e) {
 			throw e;
 		} catch (Exception e) {
@@ -4868,11 +5416,10 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean isCambioPorCertificacionFalla(Producto producto,
-			Documento documento, Ubicacion ubicacion) throws Exception {
+	public Boolean isCambioPorCertificacionFalla(Producto producto, Documento documento, Ubicacion ubicacion)
+			throws Exception {
 		try {
-			ReglaComercial reglaComercial = getReglaComercialCompleta(producto,
-					ubicacion);
+			ReglaComercial reglaComercial = getReglaComercialCompleta(producto, ubicacion);
 			if (reglaComercial.getCertificacionFalla() == null) {
 				return false;
 			}
@@ -4883,11 +5430,9 @@ public class SucursalService {
 			// Date fechaEmision = formateador.parse(fecha);
 
 			long MILISEGUNDOS_EN_UN_DIA = 1000 * 60 * 60 * 24;
-			long dias = (fechaActual.getTime() - documento.getFechaEmision()
-					.getTime()) / MILISEGUNDOS_EN_UN_DIA;
+			long dias = (fechaActual.getTime() - documento.getFechaEmision().getTime()) / MILISEGUNDOS_EN_UN_DIA;
 			if (dias >= reglaComercial.getCertificacionFalla().getInicio()
-					&& dias <= reglaComercial.getCertificacionFalla()
-							.getTermino()) {
+					&& dias <= reglaComercial.getCertificacionFalla().getTermino()) {
 				return true;
 			} else {
 				return false;
@@ -4930,22 +5475,18 @@ public class SucursalService {
 	// throw e;
 	// }
 	// }
-
-	public Boolean isCambioAutomaticoPorFallaFabricacion(Producto producto,
-			Ubicacion ubicacion) throws Exception {
+	public Boolean isCambioAutomaticoPorFallaFabricacion(Producto producto, Ubicacion ubicacion) throws Exception {
 		try {
-			ReglaComercial reglaComercial = getReglaComercialCompleta(producto,
-					ubicacion);
+			ReglaComercial reglaComercial = getReglaComercialCompleta(producto, ubicacion);
 
-			if (reglaComercial == null
-					|| reglaComercial.getFallaFabricacion() == null)
+			if (reglaComercial == null || reglaComercial.getFallaFabricacion() == null) {
 				return false;
+			}
 
 			if (isFamiliaExcluidaFallaFabricacionByProducto(producto)) {
 				return false;
 			} else {
-				if (producto.getPrecioVenta() <= reglaComercial
-						.getFallaFabricacion().getPrecioLimite()) {
+				if (producto.getPrecioVenta() <= reglaComercial.getFallaFabricacion().getPrecioLimite()) {
 					return true;
 				} else {
 					return false;
@@ -4957,16 +5498,14 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean validarFallaFabricacion(OrdenTrabajo oT, Ubicacion sucursal,
-			Date hoy) throws Exception {
+	public Boolean validarFallaFabricacion(OrdenTrabajo oT, Ubicacion sucursal, Date hoy) throws Exception {
 		try {
-			oT.setProducto(productoDAO
-					.getProductoById(oT.getProducto().getId()));
-			ReglaComercial regla = getReglaComercialCompleta(oT.getProducto(),
-					sucursal);
-			if (isFamiliaExcluidaFallaFabricacionByProducto(oT.getProducto()))
+			oT.setProducto(productoDAO.getProductoById(oT.getProducto().getId()));
+			ReglaComercial regla = getReglaComercialCompleta(oT.getProducto(), sucursal);
+			if (isFamiliaExcluidaFallaFabricacionByProducto(oT.getProducto())) {
 				throw new SSTException(
-						"El producto no puede enviarse a fallas de fabricación porque la familia no califica como falla de fabricación");
+						"El producto no puede enviarse a fallas de fabricaciï¿½n porque la familia no califica como falla de fabricaciï¿½n");
+			}
 
 			if (regla == null || regla.getFallaFabricacion() == null) {
 				return false;
@@ -4983,37 +5522,30 @@ public class SucursalService {
 
 			Calendar fechaLimite = Calendar.getInstance();
 			fechaLimite.setTime(documento.getFechaEmision());
-			fechaLimite.add(Calendar.DAY_OF_YEAR, regla.getFallaFabricacion()
-					.getDiasTope());
+			fechaLimite.add(Calendar.DAY_OF_YEAR, regla.getFallaFabricacion().getDiasTope());
 
 			Calendar fechaActual = Calendar.getInstance();
 			fechaActual.setTime(hoy);
 
 			if (fechaLimite.after(fechaActual) || fechaLimite.getTime().equals(fechaActual.getTime())) {
-				List<Producto> productos = productoDAO
-						.listProductoByTipoDocumentoAndIdDocumento(documento);
+				List<Producto> productos = productoDAO.listProductoByTipoDocumentoAndIdDocumento(documento);
 				for (Producto prod : productos) {
 					if (prod.getId().equals(oT.getProducto().getId())) {
-						if (prod.getPrecioVenta() <= regla
-								.getFallaFabricacion().getPrecioLimite()) {
+						if (prod.getPrecioVenta() <= regla.getFallaFabricacion().getPrecioLimite()) {
 							if (isFamiliaExcluidaFallaFabricacionByProducto(prod)) {
 								throw new SSTException(
-										"El producto no puede enviarse a fallas de fabricación porque la familia no califica como falla de fabricación");
+										"El producto no puede enviarse a fallas de fabricaciï¿½n porque la familia no califica como falla de fabricaciï¿½n");
 							}
 							return true;
 						} else {
-							throw new SSTException(
-									"Precio del producto es mayor al precio limite de $"
-											+ regla.getFallaFabricacion()
-													.getPrecioLimite());
+							throw new SSTException("Precio del producto es mayor al precio limite de $"
+									+ regla.getFallaFabricacion().getPrecioLimite());
 						}
 					}
 				}
 			} else {
-				throw new SSTException(
-						"Está fuera del plazo de "
-								+ regla.getFallaFabricacion().getDiasTope()
-								+ " días para cambiar un producto por falla de fabricación");
+				throw new SSTException("Estï¿½ fuera del plazo de " + regla.getFallaFabricacion().getDiasTope()
+						+ " dï¿½as para cambiar un producto por falla de fabricaciï¿½n");
 			}
 			return false;
 		} catch (SSTException e) {
@@ -5024,26 +5556,25 @@ public class SucursalService {
 		}
 	}
 
-	public Boolean isFamiliaExcluidaNumeroSerieByProducto(Producto producto)
-			throws Exception {
+	public Boolean isFamiliaExcluidaNumeroSerieByProducto(Producto producto) throws Exception {
 		try {
 			Familia familia = familiaDAO.getByIdProducto(producto.getId());
-			if (familia == null)
+			if (familia == null) {
 				return false;
-			return !(familiaDAO.getFamiliaExcluidaSerieByIdFamilia(familia
-					.getId()) == null);
+			}
+			return !(familiaDAO.getFamiliaExcluidaSerieByIdFamilia(familia.getId()) == null);
 		} catch (Exception e) {
 			log.error(e, e);
 			throw e;
 		}
 	}
 
-	public Boolean isFamiliaExcluidaFallaFabricacionByProducto(Producto producto)
-			throws Exception {
+	public Boolean isFamiliaExcluidaFallaFabricacionByProducto(Producto producto) throws Exception {
 		try {
 			Familia familia = familiaDAO.getByIdProducto(producto.getId());
-			if (familia == null)
+			if (familia == null) {
 				return false;
+			}
 			return !(familiaDAO.getFamiliaExcluidaByIdFamilia(familia.getId()) == null);
 		} catch (Exception e) {
 			log.error(e, e);
@@ -5051,23 +5582,20 @@ public class SucursalService {
 		}
 	}
 
-	public OrdenTrabajo cerrarOTYCrearOTFallaFabricacion(OrdenTrabajo oT,
-			Ubicacion sucursal, Usuario usuario, Date hoy) throws Exception {
+	public OrdenTrabajo cerrarOTYCrearOTFallaFabricacion(OrdenTrabajo oT, Ubicacion sucursal, Usuario usuario, Date hoy)
+			throws Exception {
 		try {
 			OrdenTrabajo oTOriginal = oT;
 			oT = ordenTrabajoDAO.getOTById(oT.getId());
 			if (!this.validarFallaReiterada(oT, sucursal, hoy)) {
-				throw new SSTException(
-						"No se puede volver a crear una OT, ya que no califica para falla reiterada");
+				throw new SSTException("No se puede volver a crear una OT, ya que no califica para falla reiterada");
 			}
 			ordenTrabajoDAO.updateCerrarOT(oT);
 			oT.setId(null);
 
 			oT.setLogistico(getLogisticoById(usuario.getId()));
-			oT = ordenTrabajoService
-					.saveOTFallaReiterada(oT, usuario, sucursal);
-			List<TipoFallas> fallasOTOriginal = tipoFallasDAO
-					.ListTipoFallasOTByOT(oTOriginal);
+			oT = ordenTrabajoService.saveOTFallaReiterada(oT, usuario, sucursal);
+			List<TipoFallas> fallasOTOriginal = tipoFallasDAO.ListTipoFallasOTByOT(oTOriginal);
 
 			/* Guardar Fallas */
 			List<Long> idTipoFallas = new ArrayList<Long>();
@@ -5080,21 +5608,15 @@ public class SucursalService {
 			saveTipoFallas(oT.getId(), idTipoFallas, filterOT);
 
 			/* copiar Accesorios */
-			List<Accesorio> accesorios = accesorioDAO.listAccesoriosByOT(oT
-					.getId());
-			List<Accesorio> accesoriosOTOriginal = accesorioDAO
-					.listAccesoriosByOT(oTOriginal.getId());
+			List<Accesorio> accesorios = accesorioDAO.listAccesoriosByOT(oT.getId());
+			List<Accesorio> accesoriosOTOriginal = accesorioDAO.listAccesoriosByOT(oTOriginal.getId());
 
 			for (int i = 0; i < accesorios.size(); i++) {
-				accesorios.get(i).setUbicacion(
-						accesoriosOTOriginal.get(i).getUbicacion());
+				accesorios.get(i).setUbicacion(accesoriosOTOriginal.get(i).getUbicacion());
 				accesorios.get(i).setRequerido(true);
-				accesorios.get(i).setRecibidoCCalidad(
-						accesoriosOTOriginal.get(i).getRecibidoCCalidad());
-				accesorios.get(i).setRecibidoCd(
-						accesoriosOTOriginal.get(i).getRecibidoCd());
-				accesorios.get(i).setRecibidoDestino(
-						accesoriosOTOriginal.get(i).getRecibidoDestino());
+				accesorios.get(i).setRecibidoCCalidad(accesoriosOTOriginal.get(i).getRecibidoCCalidad());
+				accesorios.get(i).setRecibidoCd(accesoriosOTOriginal.get(i).getRecibidoCd());
+				accesorios.get(i).setRecibidoDestino(accesoriosOTOriginal.get(i).getRecibidoDestino());
 				accesorios.get(i).setCodigoBarra(null);
 
 				updateUbicacionAccesorio(accesorios.get(i));
@@ -5102,14 +5624,11 @@ public class SucursalService {
 
 			/* copiar Partes */
 			List<Parte> partes = parteDAO.listPartesOTByOT(oT.getId());
-			List<Parte> partesOTOriginal = parteDAO.listPartesOTByOT(oTOriginal
-					.getId());
+			List<Parte> partesOTOriginal = parteDAO.listPartesOTByOT(oTOriginal.getId());
 			for (int i = 0; i < partes.size(); i++) {
-				partes.get(i)
-						.setcCalidad(partesOTOriginal.get(i).getcCalidad());
+				partes.get(i).setcCalidad(partesOTOriginal.get(i).getcCalidad());
 				partes.get(i).setEstado(partesOTOriginal.get(i).getEstado());
-				partes.get(i).setObservaciones(
-						partesOTOriginal.get(i).getObservaciones());
+				partes.get(i).setObservaciones(partesOTOriginal.get(i).getObservaciones());
 				partes.get(i).setId(partesOTOriginal.get(i).getId());
 				partes.get(i).setIdOT(partesOTOriginal.get(i).getIdOT());
 			}
@@ -5122,15 +5641,12 @@ public class SucursalService {
 			updateOTRevision(oT);
 
 			/* Cerrar OT */
-			oTOriginal.getEstado().setId(
-					Constants.OT_ESTADO_RECHAZADA_POR_CLIENTE);
+			oTOriginal.getEstado().setId(Constants.OT_ESTADO_RECHAZADA_POR_CLIENTE);
 			oTOriginal.setCerrada(true);
 			oTOriginal.setCerradaCliente(true);
-			oTOriginal
-					.setMotivoCierre("Producto rechazado por cliente en la entrega");
+			oTOriginal.setMotivoCierre("Producto rechazado por cliente en la entrega");
 			ordenTrabajoDAO.updateCerrarOT(oTOriginal);
-			Bitacora bitacora = bitacoraDAO.getUltimaBitacoraAbierta(oTOriginal
-					.getId());
+			Bitacora bitacora = bitacoraDAO.getUltimaBitacoraAbierta(oTOriginal.getId());
 			bitacora.setFechaSalida(utilDAO.getDate());
 			bitacoraDAO.updateFechaSalida(bitacora);
 
@@ -5143,8 +5659,8 @@ public class SucursalService {
 		}
 	}
 
-	public ListRange listGuiasPendientesAgrupadasSucursal(Ubicacion ubicacion,
-			GridControl gridControl) throws Exception {
+	public ListRange listGuiasPendientesAgrupadasSucursal(Ubicacion ubicacion, GridControl gridControl)
+			throws Exception {
 		try {
 			ListRange listRange = new ListRange();
 			FilterGuiasPendientes filter = new FilterGuiasPendientes();
@@ -5152,21 +5668,17 @@ public class SucursalService {
 			filter.setOrderBy(gridControl.getOrderBy());
 			filter.setSortOrder(gridControl.getSortOrder());
 			filter.setIdOrigen(ubicacion.getId());
-			List<GuiaPendienteAgrupada> guiasPendientesAgrupadas = guiaAgrupadaDAO
-					.listGuiasAgrupadasPendientes(filter, gridControl);
+			List<GuiaPendienteAgrupada> guiasPendientesAgrupadas = guiaAgrupadaDAO.listGuiasAgrupadasPendientes(filter,
+					gridControl);
 			for (GuiaPendienteAgrupada gpa : guiasPendientesAgrupadas) {
-				if (gpa.getTipo().getCodigo()
-						.equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION)) {
-					gpa.getTipo().setGlosa("Cambio por Falla de Fabricación");
-				} else if (gpa.getTipo().getCodigo()
-						.equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA)) {
-					gpa.getTipo().setGlosa(
-							"Cambio automático proveedor producto");
+				if (gpa.getTipo().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION)) {
+					gpa.getTipo().setGlosa("Cambio por Falla de Fabricaciï¿½n");
+				} else if (gpa.getTipo().getCodigo().equals(Constants.CAMBIO_AUTOMATICO_FALLA_REITERADA)) {
+					gpa.getTipo().setGlosa("Cambio automï¿½tico proveedor producto");
 				}
 			}
 			listRange.setRows(guiasPendientesAgrupadas);
-			listRange.setTotal(guiaAgrupadaDAO
-					.getTotalGuiasAgrupadasPendientes(filter));
+			listRange.setTotal(guiaAgrupadaDAO.getTotalGuiasAgrupadasPendientes(filter));
 			return listRange;
 		} catch (Exception e) {
 			log.error(e, e);
@@ -5174,51 +5686,38 @@ public class SucursalService {
 		}
 	}
 
-	public void processGuiasPendientesAgrupadas(Ubicacion ubicacion,
-			Usuario usuario) throws Exception {
+	public void processGuiasPendientesAgrupadas(Ubicacion ubicacion, Usuario usuario) throws Exception {
 		try {
 			FilterGuiasPendientes filterGuiasPendientes = new FilterGuiasPendientes();
 			filterGuiasPendientes.setIdUbicacion(ubicacion.getId());
-			Integer bitacorasDesvinculadas = bitacoraDAO
-					.updateBitacoraUnlinkGuia(filterGuiasPendientes);
+			Integer bitacorasDesvinculadas = bitacoraDAO.updateBitacoraUnlinkGuia(filterGuiasPendientes);
 			log.info("Bitacoras descinculadas : " + bitacorasDesvinculadas);
 
 			desvincularGuiaFromAccesorio(filterGuiasPendientes);
-			Integer guiasEliminadas = guiaAgrupadaDAO
-					.deletePorEnviarByUbicacion(filterGuiasPendientes);
+			Integer guiasEliminadas = guiaAgrupadaDAO.deletePorEnviarByUbicacion(filterGuiasPendientes);
 			log.info("Guias Eliminadas : " + guiasEliminadas);
-			processGuiasPendientesAgrupadas(ubicacion, usuario,
-					Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION, true);
-			processGuiasPendientesAgrupadas(ubicacion, usuario,
-					Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION, false);
-			processGuiasPendientesAgrupadas(ubicacion, usuario,
-					Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO, true);
-			processGuiasPendientesAgrupadas(ubicacion, usuario,
-					Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO, false);
-			processGuiasPendientesAgrupadas(ubicacion, usuario,
-					Constants.CAMBIO_AUTOMATICO_PROVEEDOR_CARTA, true);
-			processGuiasPendientesAgrupadas(ubicacion, usuario,
-					Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO, false);
+			processGuiasPendientesAgrupadas(ubicacion, usuario, Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION, true);
+			processGuiasPendientesAgrupadas(ubicacion, usuario, Constants.CAMBIO_AUTOMATICO_FALLA_FABRICACION, false);
+			processGuiasPendientesAgrupadas(ubicacion, usuario, Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO, true);
+			processGuiasPendientesAgrupadas(ubicacion, usuario, Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO, false);
+			processGuiasPendientesAgrupadas(ubicacion, usuario, Constants.CAMBIO_AUTOMATICO_PROVEEDOR_CARTA, true);
+			processGuiasPendientesAgrupadas(ubicacion, usuario, Constants.CAMBIO_AUTOMATICO_PROVEEDOR_PRODUCTO, false);
 		} catch (Exception e) {
 			log.error(e, e);
 			throw e;
 		}
 	}
 
-	private void desvincularGuiaFromAccesorio(
-			FilterGuiasPendientes filterGuiasPendientes) throws Exception {
+	private void desvincularGuiaFromAccesorio(FilterGuiasPendientes filterGuiasPendientes) throws Exception {
 		try {
-			List<Guia> guiaAgrupadas = guiaAgrupadaDAO
-					.listPorEnviarByUbicacion(filterGuiasPendientes);
+			List<Guia> guiaAgrupadas = guiaAgrupadaDAO.listPorEnviarByUbicacion(filterGuiasPendientes);
 			for (Guia guiaAgrupada : guiaAgrupadas) {
 				if (guiaAgrupada != null) {
 					FilterGuia filterGuia = new FilterGuia();
 					filterGuia.setIdGuia(guiaAgrupada.getId());
-					List<Accesorio> accesorios = accesorioDAO
-							.listAccesoriosFromIdGuia(filterGuia);
+					List<Accesorio> accesorios = accesorioDAO.listAccesoriosFromIdGuia(filterGuia);
 					if (accesorios.size() > 0) {
-						accesorioDAO
-								.updateDesvincularGuiaFromAccesorio(guiaAgrupada);
+						accesorioDAO.updateDesvincularGuiaFromAccesorio(guiaAgrupada);
 					}
 				}
 			}
@@ -5228,42 +5727,31 @@ public class SucursalService {
 		}
 	}
 
-	private void processGuiasPendientesAgrupadas(Ubicacion ubicacion,
-			Usuario usuario, String tipoCambio, Boolean procesadaOW)
-			throws Exception {
+	private void processGuiasPendientesAgrupadas(Ubicacion ubicacion, Usuario usuario, String tipoCambio,
+			Boolean procesadaOW) throws Exception {
 		try {
 			FilterGuiasPendientes filterGuiasPendientes = new FilterGuiasPendientes();
 			filterGuiasPendientes.setIdUbicacion(ubicacion.getId());
 			filterGuiasPendientes.setTipoCambio(tipoCambio);
 			filterGuiasPendientes.setTipoCambioJT(tipoCambio);
 			filterGuiasPendientes.setProcesadaOW(procesadaOW);
-			List<OrdenTrabajo> ots = guiaAgrupadaDAO
-					.listOtPendientesPorGuia(filterGuiasPendientes);
+			List<OrdenTrabajo> ots = guiaAgrupadaDAO.listOtPendientesPorGuia(filterGuiasPendientes);
 			Bitacora bitacora = new Bitacora();
 			Integer productos = 0;
 			Producto productoAnterior = new Producto();
 			productoAnterior.setId(0);
 
 			if (!ots.isEmpty()) {
-				Guia guia = this
-						.saveGuiaParaAgrupacion(
-								ubicacion,
-								usuario,
-								ubicacionDAO
-										.get(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF));
+				Guia guia = this.saveGuiaParaAgrupacion(ubicacion, usuario,
+						ubicacionDAO.get(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF));
 				for (OrdenTrabajo ordenTrabajo : ots) {
-					if (!productoAnterior.getId().equals(
-							ordenTrabajo.getProducto().getId())) {
+					if (!productoAnterior.getId().equals(ordenTrabajo.getProducto().getId())) {
 						productos++;
 						productoAnterior = ordenTrabajo.getProducto();
 						if (productos.equals(11)) {
 							productos = 0;
-							guia = this
-									.saveGuiaParaAgrupacion(
-											ubicacion,
-											usuario,
-											ubicacionDAO
-													.get(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF));
+							guia = this.saveGuiaParaAgrupacion(ubicacion, usuario,
+									ubicacionDAO.get(Constants.UBICACION_CENTRO_DISTRIBUCION_LA_VARA_FF));
 						}
 					}
 					bitacora.setGuia(guia);
@@ -5271,9 +5759,7 @@ public class SucursalService {
 					bitacora.setUbicacion(ubicacion);
 					bitacoraDAO.updateAsignaBitacoraAGuia(bitacora);
 
-					asignarGuiaToAccesorios(guia,
-							accesorioDAO.listAccesoriosByOT(ordenTrabajo
-									.getId()));
+					asignarGuiaToAccesorios(guia, accesorioDAO.listAccesoriosByOT(ordenTrabajo.getId()));
 				}
 			}
 
@@ -5283,8 +5769,7 @@ public class SucursalService {
 		}
 	}
 
-	public Guia saveGuiaParaAgrupacion(Ubicacion origen, Usuario usuario,
-			Ubicacion destino) throws Exception {
+	public Guia saveGuiaParaAgrupacion(Ubicacion origen, Usuario usuario, Ubicacion destino) throws Exception {
 		try {
 			Guia guia = new Guia();
 			guia.setEstado(new Estado());
@@ -5352,8 +5837,7 @@ public class SucursalService {
 		this.ejecutivaDAO = ejecutivaDAO;
 	}
 
-	public void setAdministracionService(
-			AdministracionService administracionService) {
+	public void setAdministracionService(AdministracionService administracionService) {
 		this.administracionService = administracionService;
 	}
 
@@ -5430,8 +5914,7 @@ public class SucursalService {
 		this.ordenTrabajoService = ordenTrabajoService;
 	}
 
-	public void setEnvioRecepcionService(
-			EnvioRecepcionService envioRecepcionService) {
+	public void setEnvioRecepcionService(EnvioRecepcionService envioRecepcionService) {
 		this.envioRecepcionService = envioRecepcionService;
 	}
 

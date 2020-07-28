@@ -17,7 +17,7 @@ $(document).ready(function() {
 		p.orderBy = $('#zonas').getSortName()[0];
 		p.sortOrder = $('#zonas').getSortOrder()[0];
 		var f = $('#zonas').getFilterColumna()[0];
-		var url = "/sst/ViewReportServlet?type=" + type + 
+		var url = "/sstnew/ViewReportServlet?type=" + type + 
 			"&report=ZonaReport" +
 			"&filterColumn=" + JSON.stringify(f) + 
 			"&gridControl=" + JSON.stringify(p);
